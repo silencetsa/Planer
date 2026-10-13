@@ -126,7 +126,9 @@ public sealed class PlannerEngine
     }
     public void EditPayment(Guid id, string name, decimal amount, DateOnly start, Repeat repeat, DateOnly? end)
     {
-        ValidatePayment(name, amount, start, end);
+        var current = State.Payments.First(p => p.Id == id).RevisionOn(Today)!;
+        bool stopped = current.End is { } currentEnd && currentEnd <= Today && end is { } newEnd && newEnd <= Today;
+        ValidatePayment(name, amount, start, end, allowStoppedBeforeStart: stopped);
         Commit(() =>
         {
             var payment = State.Payments.First(p => p.Id == id);
@@ -138,9 +140,14 @@ public sealed class PlannerEngine
     public void FinishPayment(Guid id)
     {
         var r = State.Payments.First(p => p.Id == id).RevisionOn(Today)!;
-        // If an unstarted payment is finished, it has no occurrences.
-        if (r.Start > Today) Commit(() => State.Payments.First(p => p.Id == id).DeletedFrom = Today);
-        else EditPayment(id, r.Name, r.Amount, r.Start, r.Repeat, Today);
+        // A future series may be ended before its first occurrence. Keep it visible
+        // in the completed list, with today's end date, rather than deleting it.
+        Commit(() =>
+        {
+            var payment = State.Payments.First(p => p.Id == id);
+            payment.Revisions.RemoveAll(x => x.EffectiveFrom == Today);
+            payment.Revisions.Add(new() { EffectiveFrom = Today, Name = r.Name, Amount = r.Amount, Start = r.Start, Repeat = r.Repeat, End = Today });
+        });
     }
     public void DeletePayment(Guid id) => Commit(() => State.Payments.First(p => p.Id == id).DeletedFrom = Today);
     public void TogglePayment(Guid id, DateOnly date) => Commit(() =>
@@ -155,11 +162,11 @@ public sealed class PlannerEngine
         var r = p.RevisionOn(date)!;
         return new PaymentOccurrence(p.Id, date, r.Name, r.Amount, State.PaymentChecks.Any(c => c.PaymentId == p.Id && c.Date == date));
     });
-    private static void ValidatePayment(string name, decimal amount, DateOnly start, DateOnly? end)
+    private static void ValidatePayment(string name, decimal amount, DateOnly start, DateOnly? end, bool allowStoppedBeforeStart = false)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Введите название платежа");
         if (amount <= 0 || amount > 999999999 || decimal.Round(amount, 2) != amount) throw new ArgumentException("Сумма должна быть положительной, с точностью до копеек");
-        if (end is not null && end < start) throw new ArgumentException("Окончание не может быть раньше начала");
+        if (end is not null && end < start && !allowStoppedBeforeStart) throw new ArgumentException("Окончание не может быть раньше начала");
     }
 
     public string Goal(string key) => State.Goals.GetValueOrDefault(key, "");

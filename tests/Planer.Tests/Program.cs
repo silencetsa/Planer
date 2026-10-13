@@ -121,6 +121,21 @@ Test("Finishing a series today includes today's payment", () =>
     var p = e.AddPayment("bill", 100, new(2026, 10, 6), Repeat.Weekly, null); e.FinishPayment(p.Id);
     Equal(true, p.OccursOn(clock.Today)); Equal(false, p.IsActive(clock.Today)); Equal(false, p.OccursOn(clock.Today.AddDays(7)));
 });
+Test("Finishing an unstarted series keeps it in completed payments with today's end date", () =>
+{
+    var (e, clock, store) = Setup();
+    var p = e.AddPayment("future", 100, clock.Today.AddDays(10), Repeat.Monthly, null);
+    e.FinishPayment(p.Id); e = new PlannerEngine(store, clock); p = e.State.Payments.Single();
+    Equal<DateOnly?>(null, p.DeletedFrom); Equal<DateOnly?>(clock.Today, p.RevisionOn(clock.Today)!.End);
+    Equal(false, p.IsActive(clock.Today)); Equal(false, p.OccursOn(clock.Today.AddDays(10)));
+});
+Test("Stopped future payment can be renamed while retaining its end date", () =>
+{
+    var (e, clock, _) = Setup();
+    var p = e.AddPayment("future", 100, clock.Today.AddDays(10), Repeat.Monthly, null);
+    e.FinishPayment(p.Id); e.EditPayment(p.Id, "renamed", 200, clock.Today.AddDays(10), Repeat.Monthly, clock.Today);
+    Equal("renamed", p.RevisionOn(clock.Today)!.Name); Equal(false, p.IsActive(clock.Today));
+});
 Test("Validation rejects invalid task, amount, dates and overlong habit", () =>
 {
     var (e, clock, _) = Setup();
