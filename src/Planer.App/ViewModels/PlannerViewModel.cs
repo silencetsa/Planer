@@ -58,7 +58,6 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
     public event EventHandler? HabitEditorRequested;
     public event EventHandler<Payment?>? PaymentEditorRequested;
     public event EventHandler<Guid>? HabitFinishRequested;
-    public event EventHandler<Guid>? PaymentDeleteRequested;
     public IRelayCommand PreviousCommand { get; }
     public IRelayCommand NextCommand { get; }
     public IRelayCommand TodayCommand { get; }
@@ -107,7 +106,7 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
         CreatePaymentCommand = new RelayCommand(() => PaymentEditorRequested?.Invoke(this, null));
         EditPaymentCommand = new RelayCommand<Guid>(id => PaymentEditorRequested?.Invoke(this, Payments.FirstOrDefault(p => p.Id == id)));
         FinishPaymentCommand = new RelayCommand<Guid>(id => Run(() => _engine.FinishPayment(id)));
-        DeletePaymentCommand = new RelayCommand<Guid>(id => PaymentDeleteRequested?.Invoke(this, id));
+        DeletePaymentCommand = new RelayCommand<Guid>(id => Run(() => _engine.DeletePayment(id)));
     }
     public void Navigate(PlannerScreen screen, DateOnly date) { Screen = screen; SelectedDate = date; Refresh(); }
     private void Shift(int direction) => Run(() =>

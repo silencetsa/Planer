@@ -18,7 +18,7 @@ public sealed partial class PlannerView
     }
     private UIElement HabitsBoard()
     {
-        var content = new StackPanel { Spacing = 12, MaxWidth = 1100, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var content = new StackPanel { Spacing = 12, HorizontalAlignment = HorizontalAlignment.Stretch };
         content.Children.Add(Ui.Text($"Активных привычек: {_vm.Habits.Count(h => h.Ended is null)} из 3", 13, Ui.Muted));
         if (_vm.Habits.Count == 0) content.Children.Add(Ui.Card(Ui.Text("Создайте первую привычку. Её точки появятся в планере начиная с сегодняшнего дня.", 15)));
         bool? previousGroup = null;

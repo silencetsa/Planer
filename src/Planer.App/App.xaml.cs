@@ -12,6 +12,8 @@ public partial class App : Application
     public static PlannerViewModel ViewModel { get; private set; } = null!;
     public static bool FloatingOwnsDialogs { get; set; }
     public static string DatabasePath { get; private set; } = "";
+    internal static string? CapturePath { get; private set; }
+    internal static bool CaptureToday { get; private set; }
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _clockTimer;
     private Mutex? _instanceMutex;
     private TodayWindow? _dayWindow;
@@ -27,11 +29,18 @@ public partial class App : Application
         _instanceMutex = new Mutex(true, "Local\\Planer-" + mutexKey, out var firstInstance);
         if (!firstInstance) { Exit(); return; }
         var existed = File.Exists(DatabasePath);
+        int captureIndex = Array.IndexOf(commandLine, "--capture");
+        if (dataIndex >= 0 && captureIndex >= 0 && captureIndex + 1 < commandLine.Length) CapturePath = Path.GetFullPath(commandLine[captureIndex + 1]);
         try
         {
             var store = new SqlitePlannerStore(DatabasePath);
             if (!existed && commandLine.Contains("--demo") && dataIndex >= 0) store.Save(DemoData.Create(DateOnly.FromDateTime(DateTime.Now)));
             ViewModel = new PlannerViewModel(new PlannerEngine(store, new SystemPlannerClock()));
+            int viewIndex = Array.IndexOf(commandLine, "--view");
+            if (viewIndex >= 0 && viewIndex + 1 < commandLine.Length && Enum.TryParse<PlannerScreen>(commandLine[viewIndex + 1], true, out var requestedScreen))
+                ViewModel.Navigate(requestedScreen, ViewModel.Today);
+            CaptureToday = CapturePath is not null && viewIndex >= 0 && viewIndex + 1 < commandLine.Length
+                && string.Equals(commandLine[viewIndex + 1], "Today", StringComparison.OrdinalIgnoreCase);
             Window = new MainWindow();
             ViewModel.FloatRequested += (_, _) =>
             {
@@ -50,9 +59,23 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Window = new Window { Title = "Планер — ошибка открытия данных", Content = new TextBlock { Text = "Не удалось открыть базу данных.\n" + DatabasePath + "\n\n" + ex.Message,
-                TextWrapping = TextWrapping.Wrap, Margin = new(24) } };
+            try { Directory.CreateDirectory(dataDir); File.AppendAllText(Path.Combine(dataDir, "crash.log"), $"{DateTime.Now:O} {ex}\n"); } catch { }
+            if (CapturePath is not null)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(CapturePath)!);
+                File.WriteAllText(CapturePath + ".error.txt", ex.ToString());
+                Exit(); return;
+            }
+            Window = new Window { Title = "Планер — ошибка запуска", Content = new Grid
+            {
+                RequestedTheme = ElementTheme.Light,
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                Children = { new TextBlock { Text = "Не удалось запустить планер.\n" + DatabasePath + "\n\n" + ex.Message,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Black), TextWrapping = TextWrapping.Wrap, Margin = new(24) } }
+            } };
         }
         Window.Activate();
+        if (CapturePath is not null) Window.AppWindow.Move(new Windows.Graphics.PointInt32(-3000, -3000));
+        if (CaptureToday) ViewModel.FloatCommand.Execute(null);
     }
 }

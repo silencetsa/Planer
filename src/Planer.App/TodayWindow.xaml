@@ -2,6 +2,6 @@
   <Grid RequestedTheme="Light" Background="#F5F5F5">
     <Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="*"/></Grid.RowDefinitions>
     <TitleBar x:Name="DayTitleBar" Title="Сегодня" Background="#F5F5F5" Foreground="#99908C" />
-    <Grid x:Name="DaySurface" Grid.Row="1" />
+    <Grid x:Name="DaySurface" Grid.Row="1" Background="#F5F5F5" />
   </Grid>
 </Window>

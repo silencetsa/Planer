@@ -37,7 +37,7 @@ public sealed partial class PlannerView
         if (_vm.MoodOn(date) is { } mood) Ui.Add(top, Ui.Dot(Palette.MoodColors[(int)mood], true, 11), 1);
         Ui.Add(layout, top);
         var tasks = new StackPanel { Spacing = 3 };
-        foreach (var t in _vm.TasksOn(date)) tasks.Children.Add(TaskBlock(t, compact: true));
+        foreach (var t in _vm.TasksOn(date).OrderBy(t => t.Part).ThenBy(t => t.Order)) tasks.Children.Add(TaskBlock(t, compact: true));
         Ui.Add(layout, Ui.Scroll(tasks), row: 1); Ui.Add(layout, ReadOnlyHabits(date, 8), row: 2);
         var border = Ui.Card(layout, 11); border.Padding = new(7); border.BorderThickness = new(date == _vm.Today ? 2 : 0); border.BorderBrush = Ui.Brush("#FAF03D");
         if (!belongsToMonth) border.Opacity = .43;

@@ -21,6 +21,20 @@ public sealed partial class TodayWindow : Window
         AppWindow.Resize(new Windows.Graphics.SizeInt32(340, Math.Min(610, area.Height - 50)));
         AppWindow.Move(new Windows.Graphics.PointInt32(area.X + area.Width - 364, area.Y + 24));
         DaySurface.Children.Add(new PlannerView(vm, floating: true)); RefreshTitle();
+        if (App.CaptureToday && App.CapturePath is { } path)
+        {
+            AppWindow.Move(new Windows.Graphics.PointInt32(-3400, -3000));
+            DaySurface.Loaded += async (_, _) =>
+            {
+                try
+                {
+                    if (AppWindow.Presenter is not OverlappedPresenter { IsAlwaysOnTop: true }) throw new InvalidOperationException("Окно дня не поверх остальных окон");
+                    await UiSnapshot.SaveAsync(DaySurface, path);
+                }
+                catch (Exception ex) { File.WriteAllText(path + ".error.txt", ex.ToString()); }
+                App.Window.Close();
+            };
+        }
         vm.PropertyChanged += Changed;
         Activated += (_, e) => { if (e.WindowActivationState != WindowActivationState.Deactivated) App.FloatingOwnsDialogs = true; };
         Closed += (_, _) => vm.PropertyChanged -= Changed;

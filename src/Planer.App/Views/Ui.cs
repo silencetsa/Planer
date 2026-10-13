@@ -51,7 +51,8 @@ public static class Ui
     }
     public static FontIcon Icon(string glyph, double size = 16, string color = Muted) => new() { Glyph = glyph, FontSize = size, Foreground = Brush(color) };
     public static ScrollViewer Scroll(UIElement content) => new() { Content = content, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollMode = ScrollMode.Auto };
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Disabled, VerticalScrollMode = ScrollMode.Auto,
+        HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top };
     public static Ellipse Dot(string color, bool filled, double size = 14) => new() { Width = size, Height = size, Fill = Brush(filled ? color : "#00FFFFFF"), Stroke = Brush(color), StrokeThickness = 1.3 };
     private static Microsoft.UI.Xaml.Shapes.Path StrokePath(string data, string color, double thickness = 1.6) => (Microsoft.UI.Xaml.Shapes.Path)XamlReader.Load(
         $"<Path xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' Data='{data}' Stroke='{color}' StrokeThickness='{thickness.ToString(System.Globalization.CultureInfo.InvariantCulture)}' StrokeStartLineCap='Round' StrokeEndLineCap='Round' />");

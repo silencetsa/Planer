@@ -16,7 +16,7 @@ public sealed partial class PlannerView
         var outer = new Grid { RowSpacing = 12 }; outer.RowDefinitions.Add(new() { Height = GridLength.Auto }); outer.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         var switchList = Ui.Button(Ui.Text(_vm.ShowCompletedPayments ? "← Активные платежи" : "Завершённые платежи", 13, Ui.Accent));
         switchList.HorizontalAlignment = HorizontalAlignment.Left; switchList.Click += (_, _) => { _vm.ShowCompletedPayments = !_vm.ShowCompletedPayments; _vm.Refresh(); }; Ui.Add(outer, switchList);
-        var list = new StackPanel { Spacing = 14, MaxWidth = 1100, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var list = new StackPanel { Spacing = 14, HorizontalAlignment = HorizontalAlignment.Stretch };
         var payments = _vm.Payments.Where(p => _vm.ShowCompletedPayments != p.IsActive(_vm.Today)).Select(p => (Payment: p, Revision: _vm.PaymentRevision(p)!))
             .OrderByDescending(p => FrequencyRank(p.Revision.Repeat)).ThenByDescending(p => p.Revision.Amount).ToList();
         if (payments.Count == 0) list.Children.Add(Ui.Card(Ui.Text(_vm.ShowCompletedPayments ? "Завершённых платежей пока нет." : "Добавьте платёж: он появится в карточках дней по своему расписанию.", 15)));
@@ -63,7 +63,8 @@ public sealed partial class PlannerView
             if (string.IsNullOrWhiteSpace(name.Text)) error.Text = "Введите название платежа";
             else if (!ParseAmount(amount.Text, out parsedAmount) || parsedAmount <= 0 || parsedAmount > 999999999 || decimal.Round(parsedAmount, 2) != parsedAmount) error.Text = "Введите положительную сумму с точностью до копеек";
             else if (start.Date is null) error.Text = "Выберите дату начала";
-            else if (endDate.Date is { } end && DateOnly.FromDateTime(end.DateTime) < DateOnly.FromDateTime(start.Date.Value.DateTime)) error.Text = "Окончание не может быть раньше начала";
+            else if (endDate.Date is { } end && DateOnly.FromDateTime(end.DateTime) < DateOnly.FromDateTime(start.Date.Value.DateTime)
+                && !(revision?.End is { } oldEnd && oldEnd <= _vm.Today && DateOnly.FromDateTime(end.DateTime) <= _vm.Today)) error.Text = "Окончание не может быть раньше начала";
             else { error.Text = ""; return; }
             args.Cancel = true;
         };
@@ -74,11 +75,4 @@ public sealed partial class PlannerView
     private static DateTimeOffset Offset(DateOnly date) => new(date.ToDateTime(TimeOnly.MinValue));
     private static bool ParseAmount(string text, out decimal amount) => decimal.TryParse(text, NumberStyles.Number, PlannerViewModel.Russian, out amount)
         || decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out amount);
-    private async void DeletePayment(object? sender, Guid id)
-    {
-        if (!OwnsDialogs) return;
-        var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Light, Title = "Удалить платёж?", Content = "Платёж исчезнет с сегодняшнего дня и из будущего. Прошедшие записи и отметки оплаты сохранятся.",
-            PrimaryButtonText = "Удалить", CloseButtonText = "Отмена", DefaultButton = ContentDialogButton.Close };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary) _vm.DeletePayment(id);
-    }
 }

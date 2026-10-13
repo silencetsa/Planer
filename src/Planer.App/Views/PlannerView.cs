@@ -27,14 +27,14 @@ public sealed partial class PlannerView : UserControl
         if (_subscribed) return; _subscribed = true;
         _vm.PropertyChanged += Changed; _vm.TaskEditorRequested += EditTask; _vm.ErrorRequested += ShowError;
         _vm.HabitEditorRequested += CreateHabit; _vm.HabitFinishRequested += FinishHabit;
-        _vm.PaymentEditorRequested += EditPayment; _vm.PaymentDeleteRequested += DeletePayment;
+        _vm.PaymentEditorRequested += EditPayment;
     }
     private void Unsubscribe()
     {
         if (!_subscribed) return; _subscribed = false;
         _vm.PropertyChanged -= Changed; _vm.TaskEditorRequested -= EditTask; _vm.ErrorRequested -= ShowError;
         _vm.HabitEditorRequested -= CreateHabit; _vm.HabitFinishRequested -= FinishHabit;
-        _vm.PaymentEditorRequested -= EditPayment; _vm.PaymentDeleteRequested -= DeletePayment;
+        _vm.PaymentEditorRequested -= EditPayment;
     }
     private void Changed(object? sender, PropertyChangedEventArgs args) { if (args.PropertyName == nameof(PlannerViewModel.Revision)) Render(); }
     private void Render()
