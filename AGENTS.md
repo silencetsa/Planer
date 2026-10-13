@@ -3,8 +3,33 @@
 - Implement a native Windows planner using C#, .NET 10, WinUI 3, MVVM and SQLite.
 - Preserve the pastel weekly layout and the agreed behavior documented in `docs/requirements.md`.
 - Work on `master`. One independently reviewable feature per commit.
-- Update `Agnets.md` with completed work, validation, decisions and material blockers at each feature commit.
+- Update `AGENTS.md` with completed work, validation, decisions and material blockers at each feature commit.
 - Keep domain logic in Planer.Core, SQLite persistence in Planer.Data, presentation in Planer.App. Code-behind may implement view-only input, dialogs, drag/drop and window lifecycle; business rules belong to services and view models.
 - Never commit the user's database, credentials, signing keys, caches or build output.
 - Run meaningful tests for rollover, habit history, payment recurrence and historical preservation; build the Windows application and verify its rendered UI before delivery.
 - No parallel agents are requested. Implement in this chat.
+
+# План реализации и журнал действий
+
+## Исходный план — 13 октября 2026
+
+1. Проверить Git/.NET; установить GitHub CLI, выполнить веб-авторизацию, создать закрытый репозиторий с веткой master.
+2. Подготовить WinUI 3 на .NET 10; проверить сборку и запуск минимального приложения.
+3. Создать доменную модель задач, дат, целей, настроения, привычек и платежей; реализовать SQLite-хранилище.
+4. Реализовать перенос просроченных задач в общее хранилище при смене недели и проверить пограничные сценарии.
+5. Реализовать недельный планер в стиле макета: утро/день/вечер, создание/редактирование/выполнение задач, drag-and-drop, матрица и заметки.
+6. Добавить привычки с сохранением истории и необратимым завершением после подтверждения.
+7. Добавить повторяющиеся платежи, выполнение отдельных вхождений, редактирование и завершение серий с сохранением прошлого.
+8. Добавить планер месяца, планер года, цели и навигацию между представлениями.
+9. Добавить одно синхронизированное окно текущего дня поверх остальных окон.
+10. Проверить бизнес-логику, сохранение после перезапуска и интерфейс; подготовить автономную сборку и установщик.
+
+## Журнал
+
+- Проверены доступные инструменты: Git 2.56.0, .NET SDK 10.0.100 и Desktop Runtime 10.0.0 установлены; исходная папка проекта пустая.
+- Установлен официальный GitHub CLI 2.102.0 через winget. Запущен интерактивный вход GitHub через браузер.
+- По уточнению пользователя выбран WinUI 3 вместо первоначально предложенного WPF. Изучены официальные инструкции Microsoft для .NET CLI и автономного приложения без MSIX.
+- Подготовлены `.gitignore`, правила работы и этот журнал. Кэши, личная база и сборки исключены из Git.
+- Ограничение песочницы затрагивает первый запуск .NET; локальный каталог `.tools` используется для кэша CLI и NuGet. Для скачивания официальных инструментов запрашивается автоматическое разрешение среды.
+
+- Веб-авторизация GitHub завершена. Создан закрытый репозиторий https://github.com/silencetsa/Planer; ветка master отправлена на сервер. По уточнению пользователя план и журнал объединены в AGENTS.md, ошибочный Agnets.md удалён.
