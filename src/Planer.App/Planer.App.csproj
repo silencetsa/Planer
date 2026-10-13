@@ -31,4 +31,20 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   </ItemGroup>
+  <Target Name="PinNetRuntimeForStandalonePublish" BeforeTargets="ProcessFrameworkReferences" Condition="'$(SelfContained)' == 'true'">
+    <ItemGroup>
+      <FrameworkReference Update="Microsoft.NETCore.App" RuntimeFrameworkVersion="10.0.13" />
+    </ItemGroup>
+  </Target>
+  <Target Name="IncludeWinUIResourcesInPublish" AfterTargets="ComputeFilesToPublish">
+    <!-- The unpackaged WinUI build generates these resources after content discovery. -->
+    <Error Condition="!Exists('$(TargetDir)$(AssemblyName).pri')" Text="The WinUI application resource index was not generated." />
+    <ItemGroup>
+      <_PlanerWinUIResource Include="$(TargetDir)**\*.xbf;$(TargetDir)$(AssemblyName).pri" />
+      <ResolvedFileToPublish Include="@(_PlanerWinUIResource)">
+        <RelativePath>%(_PlanerWinUIResource.RecursiveDir)%(_PlanerWinUIResource.Filename)%(_PlanerWinUIResource.Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 </Project>
