@@ -96,7 +96,9 @@ public sealed partial class PlannerView : UserControl
             button.Padding = new(0); button.Width = 24; button.Height = 26; moods.Children.Add(button);
         }
         Ui.Add(top, moods, 1); Ui.Add(inner, top);
-        var sections = Ui.Grid(1, 3, 2); foreach (var part in Enum.GetValues<DayPart>()) Ui.Add(sections, DaySection(date, part), row: (int)part);
+        var sections = new DaySectionsPanel(Enum.GetValues<DayPart>().Select(part =>
+            _vm.TasksOn(date, part).Count > 0 || (part == DayPart.Morning && _vm.PaymentsOn(date).Count > 0)).ToArray());
+        foreach (var part in Enum.GetValues<DayPart>()) sections.Children.Add(DaySection(date, part));
         Ui.Add(inner, sections, row: 1); Ui.Add(inner, HabitDots(date), row: 2);
         var card = Ui.Card(inner); card.BorderThickness = new(date == _vm.Today ? 3 : 0); card.BorderBrush = Ui.Brush("#FAF03D");
         if (date != _vm.Today || floating) return card;

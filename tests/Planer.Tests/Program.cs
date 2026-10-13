@@ -154,6 +154,28 @@ Test("Failed persistence rolls in-memory state back", () =>
     Throws<IOException>(() => e.AddTask("must not survive", false, false, null)); Equal(0, e.State.Tasks.Count);
 });
 
+Test("Day layout lends spare space only from empty sections", () =>
+{
+    var h = DaySectionLayout.Allocate(300, [160, 25, 80], [true, false, true]);
+    Equal(160d, h[0]); Equal(40d, h[1]); Equal(100d, h[2]);
+});
+Test("Day layout can borrow from two empty sections and preserves total height", () =>
+{
+    var h = DaySectionLayout.Allocate(300, [220, 25, 25], [true, false, false]);
+    Equal(220d, h[0]); Equal(40d, h[1]); Equal(40d, h[2]); Equal(300d, h.Sum());
+});
+Test("Day layout shares limited spare space between two overflowing sections", () =>
+{
+    var h = DaySectionLayout.Allocate(300, [210, 25, 180], [true, false, true]);
+    Equal(25d, h[1]); Equal(300d, h.Sum());
+    if (h[0] <= 100 || h[2] <= 100 || h[0] >= 210 || h[2] >= 180) throw new Exception("Incorrect spare-space allocation");
+});
+Test("Day layout retains equal sections when all are occupied or already fit", () =>
+{
+    Equal(true, DaySectionLayout.Allocate(300, [200, 40, 20], [true, true, true]).All(h => h == 100));
+    Equal(true, DaySectionLayout.Allocate(300, [80, 25, 80], [true, false, true]).All(h => h == 100));
+});
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;
 
