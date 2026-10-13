@@ -1,57 +1,48 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Navigation;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
+using Planer.Core;
+using Planer.Data;
+using Planer_App.ViewModels;
 
 namespace Planer_App;
 
-/// <summary>
-/// Provides application-specific behavior to supplement the default Application class.
-/// </summary>
 public partial class App : Application
 {
-    /// <summary>
-    /// The main application window. Use <c>App.Window</c> from any class that needs
-    /// the window reference (for dialogs, pickers, interop, etc.).
-    /// </summary>
     public static Window Window { get; private set; } = null!;
-
-    /// <summary>
-    /// The UI thread dispatcher. Use <c>App.DispatcherQueue</c> to marshal calls
-    /// to the UI thread. Fully qualified to avoid CS0104 ambiguity with
-    /// <see cref="Windows.System.DispatcherQueue"/>.
-    /// </summary>
-    public static Microsoft.UI.Dispatching.DispatcherQueue DispatcherQueue { get; private set; } = null!;
-
-    /// <summary>
-    /// The native window handle (HWND). Use for file pickers,
-    /// <c>DataTransferManager</c>, and any WinRT interop that requires
-    /// <c>InitializeWithWindow</c>.
-    /// </summary>
-    public static nint WindowHandle =>
-        WinRT.Interop.WindowNative.GetWindowHandle(Window);
-
-    /// <summary>
-    /// Initializes the singleton application object.
-    /// </summary>
-    public App()
+    public static PlannerViewModel ViewModel { get; private set; } = null!;
+    public static bool FloatingOwnsDialogs { get; set; }
+    public static string DatabasePath { get; private set; } = "";
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _clockTimer;
+    private Mutex? _instanceMutex;
+    public App() { InitializeComponent(); }
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        InitializeComponent();
-    }
-
-    /// <summary>
-    /// Invoked when the application is launched.
-    /// </summary>
-    /// <param name="args">Details about the launch request and process.</param>
-    protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
-    {
-        Window = new MainWindow();
-        DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        var commandLine = Environment.GetCommandLineArgs();
+        var dataIndex = Array.IndexOf(commandLine, "--data-dir");
+        var dataDir = dataIndex >= 0 && dataIndex + 1 < commandLine.Length ? commandLine[dataIndex + 1]
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Planer");
+        DatabasePath = Path.Combine(Path.GetFullPath(dataDir), "planner.db");
+        var mutexKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(DatabasePath.ToUpperInvariant())))[..24];
+        _instanceMutex = new Mutex(true, "Local\\Planer-" + mutexKey, out var firstInstance);
+        if (!firstInstance) { Exit(); return; }
+        var existed = File.Exists(DatabasePath);
+        try
+        {
+            var store = new SqlitePlannerStore(DatabasePath);
+            if (!existed && commandLine.Contains("--demo") && dataIndex >= 0) store.Save(DemoData.Create(DateOnly.FromDateTime(DateTime.Now)));
+            ViewModel = new PlannerViewModel(new PlannerEngine(store, new SystemPlannerClock()));
+            Window = new MainWindow();
+            Window.Activated += (_, e) => { if (e.WindowActivationState != WindowActivationState.Deactivated) FloatingOwnsDialogs = false; };
+            _clockTimer = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().CreateTimer();
+            _clockTimer.Interval = TimeSpan.FromSeconds(30); _clockTimer.Tick += (_, _) => ViewModel.Run(ViewModel.Tick); _clockTimer.Start();
+            Window.Closed += (_, _) => { _clockTimer.Stop(); ViewModel.Dispose(); _instanceMutex.Dispose(); };
+            UnhandledException += (_, e) => { try { File.AppendAllText(Path.Combine(dataDir, "crash.log"), $"{DateTime.Now:O} {e.Exception}\n"); } catch { } };
+        }
+        catch (Exception ex)
+        {
+            Window = new Window { Title = "Планер — ошибка открытия данных", Content = new TextBlock { Text = "Не удалось открыть базу данных.\n" + DatabasePath + "\n\n" + ex.Message,
+                TextWrapping = TextWrapping.Wrap, Margin = new(24) } };
+        }
         Window.Activate();
     }
 }

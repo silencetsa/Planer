@@ -23,6 +23,8 @@
     <Description>Персональный планер задач, привычек и платежей</Description>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../Planer.Core/Planer.Core.csproj" />
+    <ProjectReference Include="../Planer.Data/Planer.Data.csproj" />
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
     <Manifest Include="$(ApplicationManifest)" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
