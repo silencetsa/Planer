@@ -43,7 +43,7 @@ public sealed partial class PlannerView : UserControl
         if (_floating) { _root.Children.Add(DayCard(_vm.Today, true)); return; }
         _root.RowDefinitions.Add(new() { Height = GridLength.Auto }); _root.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         Ui.Add(_root, Header());
-        UIElement board = _vm.Screen switch { PlannerScreen.Week => WeekBoard(), PlannerScreen.Month => MonthBoard(), PlannerScreen.Habits => HabitsBoard(), PlannerScreen.Payments => PaymentsBoard(), _ => Ui.Card(Ui.Text("Раздел готовится", 18)) };
+        UIElement board = _vm.Screen switch { PlannerScreen.Week => WeekBoard(), PlannerScreen.Month => MonthBoard(), PlannerScreen.Year => YearBoard(), PlannerScreen.Habits => HabitsBoard(), _ => PaymentsBoard() };
         if (board is FrameworkElement element) element.Margin = new(0, 14, 0, 0); Ui.Add(_root, board, row: 1);
     }
     private UIElement Header()
