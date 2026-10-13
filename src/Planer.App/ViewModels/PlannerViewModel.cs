@@ -117,8 +117,10 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
     });
     public void Tick()
     {
-        if (_observedToday == Today) return; _observedToday = Today;
-        if (!_engine.ReconcileWeek()) Refresh();
+        if (_observedToday == Today) return;
+        bool moved = _engine.ReconcileWeek();
+        _observedToday = Today;
+        if (!moved) Refresh();
     }
     public void Refresh() { Revision++; OnPropertyChanged(nameof(Revision)); }
     private void EngineChanged(object? sender, EventArgs args) => Refresh();

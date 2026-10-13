@@ -14,6 +14,7 @@ public partial class App : Application
     public static string DatabasePath { get; private set; } = "";
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _clockTimer;
     private Mutex? _instanceMutex;
+    private TodayWindow? _dayWindow;
     public App() { InitializeComponent(); }
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -32,10 +33,19 @@ public partial class App : Application
             if (!existed && commandLine.Contains("--demo") && dataIndex >= 0) store.Save(DemoData.Create(DateOnly.FromDateTime(DateTime.Now)));
             ViewModel = new PlannerViewModel(new PlannerEngine(store, new SystemPlannerClock()));
             Window = new MainWindow();
+            ViewModel.FloatRequested += (_, _) =>
+            {
+                if (_dayWindow is null)
+                {
+                    _dayWindow = new TodayWindow(ViewModel);
+                    _dayWindow.Closed += (_, _) => { _dayWindow = null; FloatingOwnsDialogs = false; };
+                }
+                _dayWindow.Activate();
+            };
             Window.Activated += (_, e) => { if (e.WindowActivationState != WindowActivationState.Deactivated) FloatingOwnsDialogs = false; };
             _clockTimer = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().CreateTimer();
             _clockTimer.Interval = TimeSpan.FromSeconds(30); _clockTimer.Tick += (_, _) => ViewModel.Run(ViewModel.Tick); _clockTimer.Start();
-            Window.Closed += (_, _) => { _clockTimer.Stop(); ViewModel.Dispose(); _instanceMutex.Dispose(); };
+            Window.Closed += (_, _) => { _clockTimer.Stop(); _dayWindow?.Close(); ViewModel.Dispose(); _instanceMutex.Dispose(); };
             UnhandledException += (_, e) => { try { File.AppendAllText(Path.Combine(dataDir, "crash.log"), $"{DateTime.Now:O} {e.Exception}\n"); } catch { } };
         }
         catch (Exception ex)
