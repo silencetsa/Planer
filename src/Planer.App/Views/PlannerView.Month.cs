@@ -44,7 +44,7 @@ public sealed partial class PlannerView
         EnableDrop(border, date);
         border.Tapped += (_, args) =>
         {
-            if (DateTime.UtcNow <= _suppressClicksUntil || IsInteractiveSource(args.OriginalSource as DependencyObject, border)) return;
+            if (_taskDragInProgress || DateTime.UtcNow <= _suppressClicksUntil || IsInteractiveSource(args.OriginalSource as DependencyObject, border)) return;
             args.Handled = true; _vm.OpenWeekCommand.Execute(date);
         };
         return border;

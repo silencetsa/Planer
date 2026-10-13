@@ -10,7 +10,7 @@ using Windows.UI;
 
 namespace Planer_App.Views;
 
-public sealed class HandButton : Button
+public class HandButton : Button
 {
     public HandButton() => ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);
 }

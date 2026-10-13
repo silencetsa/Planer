@@ -15,6 +15,7 @@ public sealed partial class PlannerView : UserControl
     private readonly bool _floating;
     private readonly Grid _root = new();
     private DateTime _suppressClicksUntil;
+    private bool _taskDragInProgress;
     private bool _subscribed;
     public PlannerView(PlannerViewModel vm, bool floating = false)
     {
@@ -129,14 +130,16 @@ public sealed partial class PlannerView : UserControl
         text.MaxLines = compact ? 1 : 2; text.TextTrimming = TextTrimming.CharacterEllipsis; text.Margin = new(0, 0, task.Completed ? 14 : 0, 0); if (task.Completed) text.Opacity = .48;
         var contents = new Grid(); contents.Children.Add(text);
         if (task.Completed) contents.Children.Add(new Image { Source = new BitmapImage(new Uri("ms-appx:///Assets/Originals/Completed.png")), Width = 16, Height = 16, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top });
-        var button = Ui.Button(contents, tooltip: task.Description); button.Padding = new(7, compact ? 3 : 5, 7, compact ? 3 : 5);
+        var button = new DragTaskButton { Content = contents }; button.Padding = new(7, compact ? 3 : 5, 7, compact ? 3 : 5);
+        ToolTipService.SetToolTip(button, task.Description); Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, task.Description);
         button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        button.Background = Ui.Brush(Palette.TaskBackgrounds[(int)task.Kind]); button.CornerRadius = new(4); button.CanDrag = true;
-        button.Click += (_, _) => { if (DateTime.UtcNow > _suppressClicksUntil) _vm.ToggleTaskCommand.Execute(task.Id); };
+        button.Background = Ui.Brush(Palette.TaskBackgrounds[(int)task.Kind]); button.CornerRadius = new(4);
+        button.Click += (_, _) => { if (!button.IsClickSuppressed && !_taskDragInProgress && DateTime.UtcNow > _suppressClicksUntil) _vm.ToggleTaskCommand.Execute(task.Id); };
         button.PointerEntered += (_, _) => { text.MaxLines = 0; text.TextTrimming = TextTrimming.None; };
         button.PointerExited += (_, _) => { text.MaxLines = compact ? 1 : 2; text.TextTrimming = TextTrimming.CharacterEllipsis; };
-        button.DragStarting += (_, args) => { _suppressClicksUntil = DateTime.UtcNow.AddHours(1); args.Data.SetText(task.Id.ToString()); args.Data.RequestedOperation = DataPackageOperation.Move; };
-        button.DropCompleted += (_, _) => _suppressClicksUntil = DateTime.UtcNow.AddMilliseconds(250);
+        button.DragStarting += (_, args) => { _taskDragInProgress = true; args.Data.SetText(task.Id.ToString()); args.Data.RequestedOperation = DataPackageOperation.Move; };
+        button.DragGestureFinished += (_, _) => { _taskDragInProgress = false; _suppressClicksUntil = DateTime.UtcNow.AddMilliseconds(250); };
+        button.DragFailed += (_, error) => _vm.Run(() => throw error);
         var menu = new MenuFlyout();
         menu.Items.Add(new MenuFlyoutItem { Text = "Редактировать", Icon = new FontIcon { Glyph = "\uE70F" }, Command = _vm.EditTaskCommand, CommandParameter = task.Id });
         menu.Items.Add(new MenuFlyoutItem { Text = "Удалить", Icon = new FontIcon { Glyph = "\uE74D" }, Command = _vm.DeleteTaskCommand, CommandParameter = task.Id });
@@ -225,7 +228,7 @@ public sealed partial class PlannerView : UserControl
             try
             {
                 if (args.DataView.Contains(StandardDataFormats.Text) && Guid.TryParse(await args.DataView.GetTextAsync(), out var id))
-                { _suppressClicksUntil = DateTime.UtcNow.AddMilliseconds(250); _vm.MoveTaskCommand.Execute(new TaskMove(id, date, part)); }
+                { args.AcceptedOperation = DataPackageOperation.Move; _suppressClicksUntil = DateTime.UtcNow.AddMilliseconds(250); _vm.MoveTaskCommand.Execute(new TaskMove(id, date, part)); }
                 args.Handled = true;
             }
             catch (Exception ex) { await ErrorDialog(ex.Message); }

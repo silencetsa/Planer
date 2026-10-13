@@ -16,6 +16,6 @@ try {
     if (!$planerCompiler) { throw 'Установите Inno Setup 6: winget install --id JRSoftware.InnoSetup --exact' }
     & $planerCompiler /Qp installer/Planer.iss
     if ($LASTEXITCODE -ne 0) { throw 'Компиляция установщика завершилась ошибкой' }
-    Get-Item -LiteralPath (Join-Path $planerRoot 'dist\Planer-1.0.0-win-x64-setup.exe') | Select-Object FullName, Length
+    Get-Item -LiteralPath (Join-Path $planerRoot 'dist\Planer-1.0.1-win-x64-setup.exe') | Select-Object FullName, Length
 }
 finally { Pop-Location }
