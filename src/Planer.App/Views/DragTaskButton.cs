@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation;
+using Windows.Graphics.Imaging;
 
 namespace Planer_App.Views;
 
@@ -12,6 +14,8 @@ public sealed class DragTaskButton : HandButton
     private Point _pressPosition;
     private bool _dragging;
     private DateTime _ignoreClicksUntil;
+    private SoftwareBitmap? _dragBitmap;
+    private double _sourceOpacity;
     public bool IsClickSuppressed => _dragging || DateTime.UtcNow <= _ignoreClicksUntil;
     public event EventHandler? DragGestureFinished;
     public event EventHandler<Exception>? DragFailed;
@@ -25,6 +29,7 @@ public sealed class DragTaskButton : HandButton
         AddHandler(PointerReleasedEvent, new PointerEventHandler(ClearPress), true);
         AddHandler(PointerCanceledEvent, new PointerEventHandler(ClearPress), true);
         AddHandler(PointerCaptureLostEvent, new PointerEventHandler(ClearPress), true);
+        DragStarting += CreateDragVisual;
     }
 
     private void Pressed(object sender, PointerRoutedEventArgs args)
@@ -42,12 +47,17 @@ public sealed class DragTaskButton : HandButton
         double dx = point.Position.X - _pressPosition.X, dy = point.Position.Y - _pressPosition.Y;
         if (dx * dx + dy * dy < DragThreshold * DragThreshold) return;
         _pressedPointer = null; _dragging = true; args.Handled = true;
-        // Release Button's capture before handing the gesture to WinUI drag/drop.
-        ReleasePointerCapture(args.Pointer);
-        try { await StartDragAsync(point); }
+        _sourceOpacity = Opacity;
+        try
+        {
+            // Release Button's capture before handing the gesture to WinUI drag/drop.
+            ReleasePointerCapture(args.Pointer);
+            await StartDragAsync(point);
+        }
         catch (Exception ex) { DragFailed?.Invoke(this, ex); }
         finally
         {
+            Opacity = _sourceOpacity; _dragBitmap?.Dispose(); _dragBitmap = null;
             _dragging = false; _ignoreClicksUntil = DateTime.UtcNow.AddMilliseconds(250);
             DragGestureFinished?.Invoke(this, EventArgs.Empty);
         }
@@ -58,4 +68,26 @@ public sealed class DragTaskButton : HandButton
         if (_pressedPointer == args.Pointer.PointerId) _pressedPointer = null;
     }
 
+    internal async Task<SoftwareBitmap> RenderDragBitmapAsync()
+    {
+        var renderer = new RenderTargetBitmap();
+        await renderer.RenderAsync(this);
+        return SoftwareBitmap.CreateCopyFromBuffer(await renderer.GetPixelsAsync(), BitmapPixelFormat.Bgra8,
+            renderer.PixelWidth, renderer.PixelHeight, BitmapAlphaMode.Premultiplied);
+    }
+
+    private async void CreateDragVisual(UIElement sender, DragStartingEventArgs args)
+    {
+        var deferral = args.GetDeferral();
+        var anchor = args.GetPosition(this);
+        try
+        {
+            _dragBitmap = await RenderDragBitmapAsync();
+            args.DragUI.SetContentFromSoftwareBitmap(_dragBitmap, anchor);
+            // Keep the original slot visible until a drop is committed or cancelled.
+            Opacity = .35;
+        }
+        catch (Exception ex) { args.Cancel = true; DragFailed?.Invoke(this, ex); }
+        finally { deferral.Complete(); }
+    }
 }

@@ -134,6 +134,8 @@ public sealed partial class PlannerView : UserControl
         ToolTipService.SetToolTip(button, task.Description); Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, task.Description);
         button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         button.Background = Ui.Brush(Palette.TaskBackgrounds[(int)task.Kind]); button.CornerRadius = new(4);
+        button.Resources["ButtonBackgroundPointerOver"] = button.Background;
+        button.Resources["ButtonBackgroundPressed"] = button.Background;
         button.Click += (_, _) => { if (!button.IsClickSuppressed && !_taskDragInProgress && DateTime.UtcNow > _suppressClicksUntil) _vm.ToggleTaskCommand.Execute(task.Id); };
         button.PointerEntered += (_, _) => { text.MaxLines = 0; text.TextTrimming = TextTrimming.None; };
         button.PointerExited += (_, _) => { text.MaxLines = compact ? 1 : 2; text.TextTrimming = TextTrimming.CharacterEllipsis; };

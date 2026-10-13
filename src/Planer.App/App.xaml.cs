@@ -14,6 +14,7 @@ public partial class App : Application
     public static string DatabasePath { get; private set; } = "";
     internal static string? CapturePath { get; private set; }
     internal static bool CaptureToday { get; private set; }
+    internal static bool CaptureTaskPreview { get; private set; }
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _clockTimer;
     private Mutex? _instanceMutex;
     private TodayWindow? _dayWindow;
@@ -31,6 +32,7 @@ public partial class App : Application
         var existed = File.Exists(DatabasePath);
         int captureIndex = Array.IndexOf(commandLine, "--capture");
         if (dataIndex >= 0 && captureIndex >= 0 && captureIndex + 1 < commandLine.Length) CapturePath = Path.GetFullPath(commandLine[captureIndex + 1]);
+        CaptureTaskPreview = CapturePath is not null && commandLine.Contains("--capture-task-preview");
         try
         {
             var store = new SqlitePlannerStore(DatabasePath);
