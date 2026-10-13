@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Planer.App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Planer.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
