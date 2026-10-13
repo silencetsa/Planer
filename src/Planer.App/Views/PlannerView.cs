@@ -43,7 +43,7 @@ public sealed partial class PlannerView : UserControl
         if (_floating) { _root.Children.Add(DayCard(_vm.Today, true)); return; }
         _root.RowDefinitions.Add(new() { Height = GridLength.Auto }); _root.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         Ui.Add(_root, Header());
-        UIElement board = _vm.Screen switch { PlannerScreen.Week => WeekBoard(), PlannerScreen.Habits => HabitsBoard(), PlannerScreen.Payments => PaymentsBoard(), _ => Ui.Card(Ui.Text("Раздел готовится", 18)) };
+        UIElement board = _vm.Screen switch { PlannerScreen.Week => WeekBoard(), PlannerScreen.Month => MonthBoard(), PlannerScreen.Habits => HabitsBoard(), PlannerScreen.Payments => PaymentsBoard(), _ => Ui.Card(Ui.Text("Раздел готовится", 18)) };
         if (board is FrameworkElement element) element.Margin = new(0, 14, 0, 0); Ui.Add(_root, board, row: 1);
     }
     private UIElement Header()
@@ -64,14 +64,16 @@ public sealed partial class PlannerView : UserControl
         Ui.Add(header, left);
         var goals = new StackPanel { Spacing = 6 };
         var goalRow = new Grid { ColumnSpacing = 12 }; goalRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); goalRow.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        Ui.Add(goalRow, Ui.Text("Цель недели", 17, Ui.Accent, true));
-        var editGoal = new TextBox { Text = _vm.Goal, PlaceholderText = "Что хочется сделать на этой неделе?", BorderThickness = new(0), Background = Ui.Brush("#FFFFFF"), CornerRadius = new(5), FontSize = 13, Foreground = Ui.Brush(Ui.Ink), MinHeight = 34 };
+        string goalName = _vm.Screen switch { PlannerScreen.Month => "Цель месяца", PlannerScreen.Year => "Цель года", _ => "Цель недели" };
+        Ui.Add(goalRow, Ui.Text(goalName, 17, Ui.Accent, true));
+        var editGoal = new TextBox { Text = _vm.Goal, PlaceholderText = goalName, BorderThickness = new(0), Background = Ui.Brush("#FFFFFF"), CornerRadius = new(5), FontSize = 13, Foreground = Ui.Brush(Ui.Ink), MinHeight = 34 };
         editGoal.TextChanged += (_, _) => _vm.Goal = editGoal.Text; Ui.Add(goalRow, editGoal, 1); goals.Children.Add(goalRow);
         var parent = new Grid { ColumnSpacing = 10, Margin = new(100, 0, 0, 0) }; parent.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); parent.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        Ui.Add(parent, Ui.Text("Цель месяца", 11, Ui.Accent, true));
-        var parentText = Ui.Text(string.IsNullOrEmpty(_vm.ParentGoal) ? "Задаётся в планере месяца" : _vm.ParentGoal, 11, "#AA8800");
+        string parentLabel = _vm.Screen == PlannerScreen.Week ? "Цель месяца" : "Цель года";
+        Ui.Add(parent, Ui.Text(parentLabel, 11, Ui.Accent, true));
+        var parentText = Ui.Text(string.IsNullOrEmpty(_vm.ParentGoal) ? (_vm.Screen == PlannerScreen.Week ? "Задаётся в планере месяца" : "Задаётся в планере года") : _vm.ParentGoal, 11, "#AA8800");
         Ui.Add(parent, new Border { Background = Ui.Brush("#FDFBD6"), CornerRadius = new(3), Padding = new(9, 4, 9, 4), Child = parentText }, 1);
-        goals.Children.Add(parent); Ui.Add(header, goals, 1); return header;
+        if (_vm.Screen != PlannerScreen.Year) goals.Children.Add(parent); Ui.Add(header, goals, 1); return header;
     }
     private UIElement WeekBoard()
     {
@@ -164,9 +166,10 @@ public sealed partial class PlannerView : UserControl
     {
         var layout = new Grid { RowSpacing = 12 }; layout.RowDefinitions.Add(new() { Height = GridLength.Auto }); layout.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) }); layout.RowDefinitions.Add(new() { Height = new(23) });
         var title = Ui.Text("НУЖНО РАСПРЕДЕЛИТЬ", 11, Ui.Muted, true); title.HorizontalAlignment = HorizontalAlignment.Center; Ui.Add(layout, title);
-        var tasks = Ui.Grid(2, gap: 8); tasks.RowDefinitions.Clear(); int rowCount = (_vm.Backlog.Count + 1) / 2;
+        int columns = _vm.Screen == PlannerScreen.Month ? 1 : 2;
+        var tasks = Ui.Grid(columns, gap: 8); tasks.RowDefinitions.Clear(); int rowCount = (_vm.Backlog.Count + columns - 1) / columns;
         for (int i = 0; i < rowCount; i++) tasks.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        for (int i = 0; i < _vm.Backlog.Count; i++) Ui.Add(tasks, TaskBlock(_vm.Backlog[i]), i % 2, i / 2);
+        for (int i = 0; i < _vm.Backlog.Count; i++) Ui.Add(tasks, TaskBlock(_vm.Backlog[i]), i % columns, i / columns);
         tasks.VerticalAlignment = VerticalAlignment.Top; Ui.Add(layout, Ui.Scroll(tasks), row: 1);
         var plus = Ui.Button(Ui.Icon("\uE710", 14), _vm.CreateTaskCommand, new TaskLocation(null), "Добавить нераспределённую задачу");
         plus.HorizontalAlignment = HorizontalAlignment.Stretch; plus.Padding = new(0); plus.Background = Ui.Brush("#F5F5F5"); plus.Opacity = 0; Ui.Add(layout, plus, row: 2);
@@ -180,7 +183,7 @@ public sealed partial class PlannerView : UserControl
         title.HorizontalAlignment = HorizontalAlignment.Center; title.Padding = new(0); Ui.Add(layout, title);
         if (_vm.NotesVisible)
         {
-            var notes = new TextBox { Text = _vm.Notes, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, BorderThickness = new(0), Background = Ui.Brush("#FFFFFF"), PlaceholderText = "Заметки этой недели…",
+            var notes = new TextBox { Text = _vm.Notes, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, BorderThickness = new(0), Background = Ui.Brush("#FFFFFF"), PlaceholderText = _vm.Screen == PlannerScreen.Month ? "Заметки этого месяца…" : "Заметки этой недели…",
                 VerticalAlignment = VerticalAlignment.Stretch, FontSize = 12, Padding = new(0), Foreground = Ui.Brush(Ui.Ink) };
             notes.TextChanged += (_, _) => _vm.Notes = notes.Text; Ui.Add(layout, notes, row: 1);
         }
