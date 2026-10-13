@@ -94,7 +94,7 @@ public sealed class PlannerEngine
             throw new ArgumentException("Название привычки — от 1 до 13 знаков");
         if (!Palette.Elements.Contains(color, StringComparer.OrdinalIgnoreCase)) throw new ArgumentException("Выберите цвет из палитры");
         if (State.Habits.Count(h => h.Ended is null) >= 3) throw new InvalidOperationException("Не более 3 активных привычек");
-        var habit = new Habit { Name = name, Color = color, Created = Today };
+        var habit = new Habit { Name = name, Color = color, Created = Today, Order = State.Habits.Select(h => h.Order).DefaultIfEmpty(0).Max() + 1 };
         Commit(() => State.Habits.Add(habit));
         return habit;
     }
@@ -114,7 +114,7 @@ public sealed class PlannerEngine
         else State.HabitChecks.Add(new() { HabitId = id, Date = date });
     });
     public IEnumerable<HabitIndicator> HabitsOn(DateOnly date) => State.Habits.Where(h => h.ExistsOn(date))
-        .OrderBy(h => h.Created).ThenBy(h => h.Id).Select(h => new HabitIndicator(h.Id, h.Name, h.Color,
+        .OrderBy(h => h.Created).ThenBy(h => h.Order).ThenBy(h => h.Id).Select(h => new HabitIndicator(h.Id, h.Name, h.Color,
             State.HabitChecks.Any(c => c.HabitId == h.Id && c.Date == date)));
 
     public Payment AddPayment(string name, decimal amount, DateOnly start, Repeat repeat, DateOnly? end)

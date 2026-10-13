@@ -47,7 +47,7 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
     public string ParentGoal => Screen == PlannerScreen.Week ? _engine.Goal(Dates.MonthKey(SelectedDate)) : _engine.Goal(Dates.YearKey(SelectedDate));
     public string Notes { get => _engine.Note(PeriodKey); set => Run(() => _engine.SetNote(PeriodKey, value)); }
     public IReadOnlyList<PlannerTask> Backlog => _engine.Backlog.ToList();
-    public IReadOnlyList<Habit> Habits => _engine.State.Habits.OrderBy(h => h.Ended is not null).ThenByDescending(h => h.Created).ThenByDescending(h => h.Id).ToList();
+    public IReadOnlyList<Habit> Habits => _engine.State.Habits.OrderBy(h => h.Ended is not null).ThenByDescending(h => h.Created).ThenByDescending(h => h.Order).ThenByDescending(h => h.Id).ToList();
     public IReadOnlyList<Payment> Payments => _engine.State.Payments.Where(p => p.DeletedFrom is null).ToList();
     public MatrixCounts Matrix => _engine.Matrix(First, Last);
     public int YearMode { get; set; }
@@ -140,7 +140,7 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
     public IReadOnlyList<HabitIndicator> HabitsOn(DateOnly date) => _engine.HabitsOn(date).ToList();
     public IReadOnlyList<PaymentOccurrence> PaymentsOn(DateOnly date) => _engine.PaymentsOn(date).ToList();
     public Mood? MoodOn(DateOnly date) => _engine.MoodOn(date);
-    public int HabitSuccess(Guid id) => _engine.State.HabitChecks.Count(c => c.HabitId == id && c.Date <= Today);
+    public int HabitSuccess(Guid id) => _engine.State.HabitChecks.Count(c => c.HabitId == id);
     public PaymentRevision? PaymentRevision(Payment p) => p.RevisionOn(Today);
     public void Dispose() => _engine.Changed -= EngineChanged;
 }

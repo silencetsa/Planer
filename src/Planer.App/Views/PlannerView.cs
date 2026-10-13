@@ -26,11 +26,13 @@ public sealed partial class PlannerView : UserControl
     {
         if (_subscribed) return; _subscribed = true;
         _vm.PropertyChanged += Changed; _vm.TaskEditorRequested += EditTask; _vm.ErrorRequested += ShowError;
+        _vm.HabitEditorRequested += CreateHabit; _vm.HabitFinishRequested += FinishHabit;
     }
     private void Unsubscribe()
     {
         if (!_subscribed) return; _subscribed = false;
         _vm.PropertyChanged -= Changed; _vm.TaskEditorRequested -= EditTask; _vm.ErrorRequested -= ShowError;
+        _vm.HabitEditorRequested -= CreateHabit; _vm.HabitFinishRequested -= FinishHabit;
     }
     private void Changed(object? sender, PropertyChangedEventArgs args) { if (args.PropertyName == nameof(PlannerViewModel.Revision)) Render(); }
     private void Render()
@@ -39,11 +41,12 @@ public sealed partial class PlannerView : UserControl
         if (_floating) { _root.Children.Add(DayCard(_vm.Today, true)); return; }
         _root.RowDefinitions.Add(new() { Height = GridLength.Auto }); _root.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         Ui.Add(_root, Header());
-        UIElement board = _vm.Screen switch { PlannerScreen.Week => WeekBoard(), _ => Ui.Card(Ui.Text("Раздел готовится", 18)) };
+        UIElement board = _vm.Screen switch { PlannerScreen.Week => WeekBoard(), PlannerScreen.Habits => HabitsBoard(), _ => Ui.Card(Ui.Text("Раздел готовится", 18)) };
         if (board is FrameworkElement element) element.Margin = new(0, 14, 0, 0); Ui.Add(_root, board, row: 1);
     }
     private UIElement Header()
     {
+        if (_vm.Screen is PlannerScreen.Habits or PlannerScreen.Payments) return ManagementHeader();
         var header = Ui.Grid(2); header.ColumnDefinitions[0].Width = new(420);
         var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Top };
         var settings = Ui.Button(Ui.Icon("\uE713", 19), tooltip: "Настройки"); settings.Margin = new(0, 2, 12, 0);

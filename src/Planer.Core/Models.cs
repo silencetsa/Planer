@@ -30,6 +30,7 @@ public sealed class Habit
     public string Name { get; set; } = "";
     public string Color { get; set; } = Palette.Elements[3];
     public DateOnly Created { get; set; }
+    public long Order { get; set; }
     // Exclusive: finishing today removes today's indicator and all future ones.
     public DateOnly? Ended { get; set; }
     public bool ExistsOn(DateOnly date) => date >= Created && (Ended is null || date < Ended);
