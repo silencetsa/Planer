@@ -27,12 +27,14 @@ public sealed partial class PlannerView : UserControl
         if (_subscribed) return; _subscribed = true;
         _vm.PropertyChanged += Changed; _vm.TaskEditorRequested += EditTask; _vm.ErrorRequested += ShowError;
         _vm.HabitEditorRequested += CreateHabit; _vm.HabitFinishRequested += FinishHabit;
+        _vm.PaymentEditorRequested += EditPayment; _vm.PaymentDeleteRequested += DeletePayment;
     }
     private void Unsubscribe()
     {
         if (!_subscribed) return; _subscribed = false;
         _vm.PropertyChanged -= Changed; _vm.TaskEditorRequested -= EditTask; _vm.ErrorRequested -= ShowError;
         _vm.HabitEditorRequested -= CreateHabit; _vm.HabitFinishRequested -= FinishHabit;
+        _vm.PaymentEditorRequested -= EditPayment; _vm.PaymentDeleteRequested -= DeletePayment;
     }
     private void Changed(object? sender, PropertyChangedEventArgs args) { if (args.PropertyName == nameof(PlannerViewModel.Revision)) Render(); }
     private void Render()
@@ -41,7 +43,7 @@ public sealed partial class PlannerView : UserControl
         if (_floating) { _root.Children.Add(DayCard(_vm.Today, true)); return; }
         _root.RowDefinitions.Add(new() { Height = GridLength.Auto }); _root.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         Ui.Add(_root, Header());
-        UIElement board = _vm.Screen switch { PlannerScreen.Week => WeekBoard(), PlannerScreen.Habits => HabitsBoard(), _ => Ui.Card(Ui.Text("Раздел готовится", 18)) };
+        UIElement board = _vm.Screen switch { PlannerScreen.Week => WeekBoard(), PlannerScreen.Habits => HabitsBoard(), PlannerScreen.Payments => PaymentsBoard(), _ => Ui.Card(Ui.Text("Раздел готовится", 18)) };
         if (board is FrameworkElement element) element.Margin = new(0, 14, 0, 0); Ui.Add(_root, board, row: 1);
     }
     private UIElement Header()
@@ -141,7 +143,7 @@ public sealed partial class PlannerView : UserControl
         var layout = new Grid { ColumnSpacing = 5 }; layout.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); layout.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); layout.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         Ui.Add(layout, Ui.Text(payment.Completed ? "✓" : "✪", 14, payment.Completed ? "#FFFFFF" : "#FAF03D"));
         var title = Ui.Text(payment.Name, compact ? 10 : 11, "#FFFFFF", true); title.MaxLines = 1; title.TextTrimming = TextTrimming.CharacterEllipsis; Ui.Add(layout, title, 1);
-        Ui.Add(layout, Ui.Text($"{payment.Amount.ToString("N0", PlannerViewModel.Russian)} ₽", compact ? 10 : 11, "#FAF03D", true), 2);
+        Ui.Add(layout, Ui.Text(FormatAmount(payment.Amount), compact ? 10 : 11, "#FAF03D", true), 2);
         var button = Ui.Button(layout, _vm.PaymentCommand, new PaymentToggle(payment.PaymentId, payment.Date), $"{payment.Name}: {payment.Amount:N2} ₽ — отметить оплату");
         button.Background = Ui.Brush(payment.Completed ? "#E4CAED" : Ui.Accent); button.Padding = new(5, 3, 5, 3); button.HorizontalAlignment = HorizontalAlignment.Stretch;
         button.HorizontalContentAlignment = HorizontalAlignment.Stretch; button.CornerRadius = new(4); if (payment.Completed) layout.Opacity = .6; return button;
