@@ -111,7 +111,7 @@ public sealed partial class PlannerView : UserControl
         var card = Ui.Card(inner);
         var sections = new DaySectionsPanel(Enum.GetValues<DayPart>().Select(part =>
             _vm.TasksOn(date, part).Count > 0 || (part == DayPart.Morning && _vm.PaymentsOn(date).Count > 0)).ToArray());
-        foreach (var part in Enum.GetValues<DayPart>()) sections.Children.Add(DaySection(date, part, sections, card));
+        foreach (var part in Enum.GetValues<DayPart>()) DaySection(date, part, sections, card);
         Ui.Add(inner, sections, row: 1); Ui.Add(inner, HabitDots(date), row: 2);
         card.BorderThickness = new(date == _vm.Today && !floating ? 4 : 0); card.BorderBrush = Ui.Brush("#FAF03D");
         if (date == _vm.Today && !floating) card.CornerRadius = new(17, 0, 17, 17);
@@ -121,7 +121,7 @@ public sealed partial class PlannerView : UserControl
         pin.Background = Ui.Brush("#FAF03D"); pin.Width = 26; pin.Height = 24; pin.Padding = new(2, 0, 0, 2); pin.HorizontalAlignment = HorizontalAlignment.Right;
         pin.VerticalAlignment = VerticalAlignment.Top; pin.CornerRadius = new(0, 0, 0, 9); outer.Children.Add(pin); return outer;
     }
-    private UIElement DaySection(DateOnly date, DayPart part, DaySectionsPanel owner, FrameworkElement dayCard)
+    private void DaySection(DateOnly date, DayPart part, DaySectionsPanel owner, FrameworkElement dayCard)
     {
         var layout = new Grid { ColumnSpacing = 6 };
         layout.ColumnDefinitions.Add(new() { Width = new(17) }); layout.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
@@ -135,7 +135,10 @@ public sealed partial class PlannerView : UserControl
         plus.Visibility = Visibility.Collapsed; plus.Background = Ui.Brush(Ui.Paper);
         var insertion = new Border { Child = plus }; content.Children.Add(insertion);
         plus.RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => owner.SetInsertionSection((int)part, plus.Visibility == Visibility.Visible));
-        var taskArea = new Border { Child = Ui.Scroll(content), BorderBrush = Ui.Brush("#F2F2F2"), BorderThickness = new(0, 0, 0, part == DayPart.Evening ? 0 : 1) };
+        var scroll = Ui.Scroll(content);
+        // A changing scrollbar width must not change text wrapping and feed back into section heights.
+        scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
+        var taskArea = new Border { Child = scroll, BorderBrush = Ui.Brush("#F2F2F2"), BorderThickness = new(0, 0, 0, part == DayPart.Evening ? 0 : 1) };
         Ui.Add(layout, taskArea, 1);
         var border = new Border { Child = layout, Background = Ui.Brush("#00FFFFFF"), MinHeight = 28, Padding = new(0, 5, 0, 3) };
         bool pointerInside = false;
@@ -143,7 +146,8 @@ public sealed partial class PlannerView : UserControl
         border.PointerExited += (_, _) => { pointerInside = false; if (plus.FocusState == FocusState.Unfocused) plus.Visibility = Visibility.Collapsed; };
         border.GotFocus += (_, _) => plus.Visibility = Visibility.Visible;
         border.LostFocus += (_, _) => { if (!pointerInside) plus.Visibility = Visibility.Collapsed; };
-        EnableDrop(border, date, part, () => insertion, dayCard); return border;
+        owner.AddSection(border, content, 23, part == DayPart.Evening ? 8 : 9);
+        EnableDrop(border, date, part, () => insertion, dayCard);
     }
     private static string PartName(DayPart part) => part switch { DayPart.Morning => "утро", DayPart.Afternoon => "день", _ => "вечер" };
     private UIElement TaskBlock(PlannerTask task, bool compact = false)

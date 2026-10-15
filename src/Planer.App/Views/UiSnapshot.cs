@@ -16,6 +16,27 @@ internal static class UiSnapshot
     public static async Task SaveScenarioAsync(FrameworkElement view, string path, string scenario, PlannerViewModel vm)
     {
         await PrepareAsync(view);
+        if (scenario is "LayoutStress" or "TodayLayoutStress")
+        {
+            await CheckLayoutStressAsync(view, path, vm, scenario == "TodayLayoutStress"); return;
+        }
+        if (scenario == "LayoutRecovery") { await CheckLayoutRecoveryAsync(view, path, vm); return; }
+        if (scenario is "HabitsActions" or "PaymentsActions")
+        {
+            var create = Descendants<Button>(view).Single(b => b.Name == "CreateManagementButton");
+            var position = create.TransformToVisual(view).TransformPoint(new Windows.Foundation.Point());
+            if (position.X < view.ActualWidth / 2 || position.Y > 100 || view.ActualWidth - position.X - create.ActualWidth < 10)
+                throw new InvalidOperationException("Создать должна находиться справа в заголовке, с отступом от края");
+            if (scenario == "PaymentsActions")
+            {
+                var completed = Descendants<Button>(view).Single(b => b.Name == "CompletedPaymentsButton");
+                var caption = Descendants<TextBlock>(completed).First();
+                if (completed.Background is not SolidColorBrush { Color: { R: 255, G: 238, B: 227 } }
+                    || caption.Foreground is not SolidColorBrush { Color: { R: 255, G: 124, B: 5 } })
+                    throw new InvalidOperationException("Кнопка завершённых платежей не использует оранжевую палитру");
+            }
+            await SaveAsync(view, path); return;
+        }
         if (scenario == "RecurringMonth")
         {
             var request = new TaskEditRequest(null, "Еженедельная проверка планов", true, false, new(null));
@@ -139,6 +160,95 @@ internal static class UiSnapshot
         await SaveAsync(chrome ?? popupRoot, path);
     }
     private static string NormalizeLines(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');
+    private static async Task CheckLayoutStressAsync(FrameworkElement view, string path, PlannerViewModel vm, bool floating)
+    {
+        void Trace(string step) => File.AppendAllText(path + ".steps.log", $"{DateTime.UtcNow:O} {step}\n");
+        Trace("begin");
+        var application = (App)Application.Current; int failures = application.LayoutCycleCount;
+        var window = floating ? App.FloatingWindow! : App.Window;
+        var minimum = WindowSizing.Minimum(window, floating);
+        if (window.AppWindow.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter presenter
+            || presenter.PreferredMinimumWidth != minimum.Width || presenter.PreferredMinimumHeight != minimum.Height)
+            throw new InvalidOperationException("Минимальные размеры окна не применены");
+        // Wrap long descriptions and overflow all three sections, exercising the actual ScrollViewers.
+        for (int i = 0; i < 9; i++)
+        {
+            Trace($"seed {i}");
+            var request = new TaskEditRequest(null, $"Проверка {i}: длинное описание задачи с несколькими строками текста для изменения высоты карточки и прокрутки внутри секции дня.", true, false,
+                new(vm.Today, i < 6 ? DayPart.Morning : i < 8 ? DayPart.Afternoon : DayPart.Evening));
+            vm.SaveTask(request, request.Description, true, false, Repeat.None);
+        }
+        var screens = floating ? new[] { PlannerScreen.Week } : Enum.GetValues<PlannerScreen>();
+        foreach (var screen in screens)
+        {
+            Trace($"screen {screen}");
+            vm.Navigate(screen, vm.Today); await PrepareAsync(view);
+            for (int step = 0; step < (screen == PlannerScreen.Week ? 24 : 4); step++)
+            {
+                Trace($"step {screen} {step}");
+                var size = (step % 4) switch
+                {
+                    0 => minimum,
+                    1 => new Windows.Graphics.SizeInt32(minimum.Width + 1, minimum.Height + 1),
+                    2 => new Windows.Graphics.SizeInt32(floating ? 520 : 1920, floating ? 850 : 1080),
+                    _ => new Windows.Graphics.SizeInt32(floating ? 340 : 1400, floating ? 610 : 850)
+                };
+                window.AppWindow.Resize(size); await Task.Delay(20); view.UpdateLayout();
+                if (screen is PlannerScreen.Week or PlannerScreen.Month)
+                {
+                    var pluses = Descendants<Button>(view).Where(b => Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(b).StartsWith($"Создать задачу: {vm.Today:dd.MM},", StringComparison.Ordinal)).ToArray();
+                    for (int i = 0; i < pluses.Length; i++) pluses[i].Visibility = i == step % 3 ? Visibility.Visible : Visibility.Collapsed;
+                    foreach (var task in Descendants<DragTaskButton>(view))
+                        foreach (var text in Descendants<TextBlock>(task)) text.MaxLines = step % 2 == 0 ? 0 : 2;
+                    foreach (var scroll in Descendants<ScrollViewer>(view)) scroll.ChangeView(null, step % 2 == 0 ? 40 : 0, null, true);
+                }
+                view.UpdateLayout();
+                if (application.LayoutCycleCount != failures) throw new InvalidOperationException("Изменение размеров вызвало цикл раскладки");
+            }
+        }
+        Trace("complete");
+        vm.Navigate(PlannerScreen.Week, vm.Today); window.AppWindow.Resize(minimum); await PrepareAsync(view);
+        if (floating && Descendants<Border>(view).Any(b => b.BorderThickness.Top > 0 && b.BorderBrush is SolidColorBrush { Color: { R: 250, G: 240, B: 61 } }))
+            throw new InvalidOperationException("В отдельном окне дня осталась жёлтая рамка");
+        if (application.LayoutCycleCount != failures) throw new InvalidOperationException("Минимальное окно вызвало цикл раскладки");
+        await SaveAsync(view, path);
+    }
+    private static async Task CheckLayoutRecoveryAsync(FrameworkElement view, string path, PlannerViewModel vm)
+    {
+        void Trace(string step) => File.AppendAllText(path + ".steps.log", $"{DateTime.UtcNow:O} {step}\n");
+        var application = (App)Application.Current;
+        var goal = vm.Goal; var backlog = vm.Backlog.Select(t => t.Id).ToArray();
+        if (application.RecoverLayoutCycle(new InvalidOperationException("Unrelated QA exception")))
+            throw new InvalidOperationException("Обработка раскладки скрывает постороннюю ошибку");
+        if (application.RecoverLayoutCycle(new System.Runtime.InteropServices.COMException("Windows.ApplicationModel.LimitedAccessFeatures"), "Windows.ApplicationModel.LimitedAccessFeatures"))
+            throw new InvalidOperationException("Обработка раскладки скрывает постороннюю ошибку WinRT");
+        Trace("open today"); vm.FloatCommand.Execute(null); await Task.Delay(100); Trace("today opened");
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            int recovered = application.LayoutRecoveryCount;
+            Trace($"recover {attempt}");
+            bool accepted = attempt == 1
+                ? application.RecoverLayoutCycle(new System.Runtime.InteropServices.COMException("Projected QA exception"), "Layout cycle detected. Layout could not complete.")
+                : application.RecoverLayoutCycle(new LayoutCycleException("Controlled recovery QA"));
+            if (!accepted)
+                throw new InvalidOperationException("LayoutCycleException не принята для восстановления");
+            for (int wait = 0; wait < 250 && application.LayoutRecoveryCount == recovered; wait++) await Task.Delay(20);
+            if (application.LayoutRecoveryCount != recovered + 1) throw new InvalidOperationException("Экран не восстановлен после завершения текущего прохода");
+            await PrepareAsync(view);
+        }
+        var retry = Descendants<Button>(view).Single(b => b.Name == "RetryPlannerLayout");
+        Trace("fallback");
+        await SaveAsync(view, path + ".fallback.png");
+        retry.Command.Execute(null);
+        for (int wait = 0; wait < 100 && !Descendants<PlannerView>(view).Any(); wait++) await Task.Delay(20);
+        await PrepareAsync(view);
+        if (!ReferenceEquals(vm, App.ViewModel) || goal != vm.Goal || !backlog.SequenceEqual(vm.Backlog.Select(t => t.Id))
+            || !Descendants<PlannerView>(view).Any() || App.FloatingWindow is null
+            || !Descendants<PlannerView>(App.FloatingWindow.Content).Any())
+            throw new InvalidOperationException("Восстановление изменило данные или потеряло одно из окон");
+        App.FloatingWindow.Close(); await SaveAsync(view, path);
+        Trace("complete");
+    }
     private static IEnumerable<T> Descendants<T>(DependencyObject node) where T : DependencyObject
     {
         if (node is T match) yield return match;

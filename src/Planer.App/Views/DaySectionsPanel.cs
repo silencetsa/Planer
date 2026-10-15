@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Planer.Core;
 using Windows.Foundation;
@@ -9,13 +10,19 @@ public sealed class DaySectionsPanel : Panel
 {
     private readonly bool[] _occupied;
     private readonly double[] _naturalHeights = new double[3];
+    private readonly List<(FrameworkElement Content, double HorizontalInset, double VerticalInset)> _contents = [];
     private const double Gap = 2;
     private int? _insertionSection;
     public DaySectionsPanel(bool[] occupied) => _occupied = occupied;
+    internal void AddSection(FrameworkElement section, FrameworkElement content, double horizontalInset, double verticalInset)
+    {
+        _contents.Add((content, horizontalInset, verticalInset)); Children.Add(section);
+    }
     public void SetInsertionSection(int section, bool visible)
     {
-        if (visible) _insertionSection = section;
-        else if (_insertionSection == section) _insertionSection = null;
+        int? next = visible ? section : _insertionSection == section ? null : _insertionSection;
+        if (next == _insertionSection) return;
+        _insertionSection = next;
         InvalidateMeasure();
     }
     private double[] Allocate(double availableHeight)
@@ -37,19 +44,18 @@ public sealed class DaySectionsPanel : Panel
         double width = 0;
         for (int i = 0; i < Children.Count; i++)
         {
-            // An unbounded vertical measure gives the collapsed task text (max two lines)
-            // and payment cards their true natural height at the current card width.
-            Children[i].Measure(new Size(availableSize.Width, double.PositiveInfinity));
-            _naturalHeights[i] = Children[i].DesiredSize.Height;
-            width = Math.Max(width, Children[i].DesiredSize.Width);
+            // Only measure the scroll content with an infinite height. The section and its
+            // ScrollViewer always receive their finite viewport, avoiding alternating constraints.
+            var info = _contents[i];
+            info.Content.Measure(new Size(Math.Max(0, availableSize.Width - info.HorizontalInset), double.PositiveInfinity));
+            _naturalHeights[i] = Math.Max(28, Math.Max(19, info.Content.DesiredSize.Height) + info.VerticalInset);
+            width = Math.Max(width, info.Content.DesiredSize.Width + info.HorizontalInset);
         }
-        if (!double.IsInfinity(availableSize.Height))
-        {
-            var heights = Allocate(Math.Max(0, availableSize.Height - Gap * 2));
-            for (int i = 0; i < Children.Count; i++) Children[i].Measure(new Size(availableSize.Width, heights[i]));
-        }
+        double height = double.IsFinite(availableSize.Height) ? availableSize.Height : _naturalHeights.Sum() + Gap * 2;
+        var heights = Allocate(Math.Max(0, height - Gap * 2));
+        for (int i = 0; i < Children.Count; i++) Children[i].Measure(new Size(availableSize.Width, heights[i]));
         return new Size(double.IsInfinity(availableSize.Width) ? width : availableSize.Width,
-            double.IsInfinity(availableSize.Height) ? _naturalHeights.Sum() + Gap * 2 : availableSize.Height);
+            height);
     }
     protected override Size ArrangeOverride(Size finalSize)
     {
@@ -57,8 +63,6 @@ public sealed class DaySectionsPanel : Panel
         double top = 0;
         for (int i = 0; i < Children.Count; i++)
         {
-            // The ScrollViewer must also know its finite viewport when the final slot changes.
-            Children[i].Measure(new Size(finalSize.Width, heights[i]));
             Children[i].Arrange(new Rect(0, top, finalSize.Width, heights[i]));
             top += heights[i] + Gap;
         }

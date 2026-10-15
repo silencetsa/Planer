@@ -19,4 +19,10 @@ public sealed partial class MainPage : Page
             App.Window.Close();
         };
     }
+    internal void RecoverLayout(bool fallback)
+    {
+        Surface.Children.Clear();
+        Surface.Children.Add(fallback ? Ui.LayoutRecoveryMessage(((App)Microsoft.UI.Xaml.Application.Current).RetryLayout)
+            : new PlannerView(App.ViewModel));
+    }
 }

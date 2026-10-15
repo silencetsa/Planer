@@ -23,7 +23,7 @@ public partial class App : Application
     private TrayIcon? _tray;
     internal static TrayIcon? Tray => (Current as App)?._tray;
     internal static TodayWindow? FloatingWindow => (Current as App)?._dayWindow;
-    public App() { InitializeComponent(); }
+    public App() { UnhandledException += OnUnhandledException; InitializeComponent(); }
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         var commandLine = Environment.GetCommandLineArgs();
@@ -65,7 +65,6 @@ public partial class App : Application
             _clockTimer = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().CreateTimer();
             _clockTimer.Interval = TimeSpan.FromSeconds(30); _clockTimer.Tick += (_, _) => ViewModel.Run(ViewModel.Tick); _clockTimer.Start();
             Window.Closed += (_, _) => { _clockTimer.Stop(); _tray?.Dispose(); _dayWindow?.Close(); ViewModel.Dispose(); _instanceMutex.Dispose(); };
-            UnhandledException += (_, e) => { try { File.AppendAllText(Path.Combine(dataDir, "crash.log"), $"{DateTime.Now:O} {e.Exception}\n"); } catch { } };
         }
         catch (Exception ex)
         {

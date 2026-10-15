@@ -11,6 +11,11 @@ $planerCases = @(
     @{ Name='week'; View='Week' }, @{ Name='month'; View='Month' },
     @{ Name='year'; View='Year' }, @{ Name='habits'; View='Habits' },
     @{ Name='payments'; View='Payments' }, @{ Name='today'; View='Today' },
+    @{ Name='habits-actions'; View='Habits'; Scenario='HabitsActions' },
+    @{ Name='payments-actions'; View='Payments'; Scenario='PaymentsActions' },
+    @{ Name='layout-stress'; View='Week'; Scenario='LayoutStress'; Separate=$true; Timeout=45000 },
+    @{ Name='today-layout-stress'; View='Today'; Scenario='TodayLayoutStress'; Separate=$true; Timeout=30000 },
+    @{ Name='layout-recovery'; View='Week'; Scenario='LayoutRecovery'; Separate=$true; Timeout=30000 },
     @{ Name='tray-lifecycle'; View='Week'; Scenario='TrayLifecycle' },
     @{ Name='recurring-month'; View='Month'; Scenario='RecurringMonth'; Separate=$true },
     @{ Name='week-large'; View='Week'; Large=$true },
@@ -59,11 +64,12 @@ foreach ($planerCase in $planerCases) {
     if ($planerCase.Large) { $planerArgs += '--capture-large' }
     if ($planerCase.Preview) { $planerArgs += '--capture-task-preview' }
     $planerProcess = Start-Process -FilePath $Executable -ArgumentList $planerArgs -WorkingDirectory (Split-Path -Parent $Executable) -WindowStyle Hidden -PassThru
-    if (!$planerProcess.WaitForExit(15000)) {
+    $planerTimeout = if ($planerCase.Timeout) { $planerCase.Timeout } else { 15000 }
+    if (!$planerProcess.WaitForExit($planerTimeout)) {
         Stop-Process -Id $planerProcess.Id -Force -ErrorAction SilentlyContinue
-        throw "Рендер $planerScreen не завершился за 15 секунд"
+        throw "Рендер $planerScreen не завершился за $($planerTimeout / 1000) секунд"
     }
     if (Test-Path -LiteralPath $planerErrorPath) { throw (Get-Content -LiteralPath $planerErrorPath -Raw) }
-    if (!(Test-Path -LiteralPath $planerImagePath)) { throw "Рендер $planerScreen не создан; проверьте, не открыта ли QA-база другим процессом" }
+    if (!(Test-Path -LiteralPath $planerImagePath)) { throw "Рендер $planerScreen не создан (код $($planerProcess.ExitCode)); проверьте, не открыта ли QA-база другим процессом" }
     Get-Item -LiteralPath $planerImagePath | Select-Object Name, Length
 }

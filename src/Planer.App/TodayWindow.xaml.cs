@@ -20,6 +20,7 @@ public sealed partial class TodayWindow : Window
         var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest).WorkArea;
         AppWindow.Resize(new Windows.Graphics.SizeInt32(340, Math.Min(610, area.Height - 50)));
         AppWindow.Move(new Windows.Graphics.PointInt32(area.X + area.Width - 364, area.Y + 24));
+        WindowSizing.Configure(this, floating: true);
         DaySurface.Children.Add(new PlannerView(vm, floating: true)); RefreshTitle();
         if (App.CapturePath is not null) AppWindow.Move(new Windows.Graphics.PointInt32(-3400, -3000));
         if (App.CaptureToday && App.CapturePath is { } path)
@@ -29,7 +30,8 @@ public sealed partial class TodayWindow : Window
                 try
                 {
                     if (AppWindow.Presenter is not OverlappedPresenter { IsAlwaysOnTop: true }) throw new InvalidOperationException("Окно дня не поверх остальных окон");
-                    await UiSnapshot.SaveAsync(DaySurface, path);
+                    if (App.CaptureScenario is { } scenario) await UiSnapshot.SaveScenarioAsync(DaySurface, path, scenario, vm);
+                    else await UiSnapshot.SaveAsync(DaySurface, path);
                 }
                 catch (Exception ex) { File.WriteAllText(path + ".error.txt", ex.ToString()); }
                 App.Window.Close();
@@ -41,4 +43,11 @@ public sealed partial class TodayWindow : Window
     }
     private void Changed(object? sender, PropertyChangedEventArgs args) { if (args.PropertyName == nameof(PlannerViewModel.Revision)) RefreshTitle(); }
     private void RefreshTitle() { Title = $"Сегодня · {_vm.Today.ToString("d MMMM", PlannerViewModel.Russian)}"; DayTitleBar.Title = Title; }
+    internal void RecoverLayout(bool fallback)
+    {
+        WindowSizing.RestoreMinimum(this, floating: true);
+        DaySurface.Children.Clear();
+        DaySurface.Children.Add(fallback ? Ui.LayoutRecoveryMessage(((App)Application.Current).RetryLayout)
+            : new PlannerView(_vm, floating: true));
+    }
 }

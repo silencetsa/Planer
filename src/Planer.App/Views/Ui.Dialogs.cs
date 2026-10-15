@@ -30,6 +30,11 @@ public sealed class PrioritySwitch : ToggleButton
 
 public static partial class Ui
 {
+    private static readonly HashSet<ContentDialog> OpenDialogs = [];
+    internal static void CloseDialogsForLayoutRecovery()
+    {
+        foreach (var dialog in OpenDialogs.ToArray()) dialog.Hide();
+    }
     public static TextBlock FieldTitle(string title) => Text(title, 15, Blue, true);
     public static Grid PriorityRow(string left, PrioritySwitch toggle, string right)
     {
@@ -51,6 +56,8 @@ public static partial class Ui
             PrimaryButtonStyle = DialogButtonStyle(Palette.TaskBackgrounds[destructive ? 0 : 2], Palette.TaskForegrounds[destructive ? 0 : 2], scale),
             CloseButtonStyle = DialogButtonStyle(Palette.TaskBackgrounds[0], Palette.TaskForegrounds[0], scale)
         };
+        dialog.Opened += (_, _) => OpenDialogs.Add(dialog);
+        dialog.Closed += (_, _) => OpenDialogs.Remove(dialog);
         foreach (string key in new[] { "ContentDialogBackground", "ContentDialogTopOverlay" }) dialog.Resources[key] = Brush(Paper);
         dialog.Resources["ContentDialogSeparatorBorderBrush"] = Brush("#00FFFFFF");
         // WinUI applies AccentButtonStyle to the default action, even when its button style is set.
