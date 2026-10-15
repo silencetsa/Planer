@@ -34,9 +34,10 @@ public sealed partial class PlannerView
         layout.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) }); layout.RowDefinitions.Add(new() { Height = GridLength.Auto });
         var top = new Grid(); top.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); top.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var number = Ui.Button(Ui.Text(date.Day.ToString(), 12, Ui.Muted, true), _vm.OpenWeekCommand, date, $"Открыть неделю: {date:dd.MM.yyyy}"); number.HorizontalAlignment = HorizontalAlignment.Left; number.Padding = new(0); Ui.Add(top, number);
-        if (_vm.MoodOn(date) is { } mood) Ui.Add(top, Ui.Dot(Palette.MoodColors[(int)mood], true, 11), 1);
+        if (_vm.MoodOn(date) is { } mood) Ui.Add(top, Ui.Dot(Palette.MoodColors[(int)mood], true, 16), 1);
         Ui.Add(layout, top);
         var tasks = new StackPanel { Spacing = 3 };
+        foreach (var payment in _vm.PaymentsOn(date)) tasks.Children.Add(PaymentBlock(payment, compact: true));
         foreach (var t in _vm.TasksOn(date).OrderBy(t => t.Part).ThenBy(t => t.Order)) tasks.Children.Add(TaskBlock(t, compact: true));
         Ui.Add(layout, Ui.Scroll(tasks), row: 1); Ui.Add(layout, ReadOnlyHabits(date, 8), row: 2);
         var border = Ui.Card(layout, 11); border.Padding = new(7); border.BorderThickness = new(date == _vm.Today ? 2 : 0); border.BorderBrush = Ui.Brush("#FAF03D");
@@ -55,10 +56,14 @@ public sealed partial class PlannerView
             if (node is Button or Microsoft.UI.Xaml.Controls.Primitives.ScrollBar) return true;
         return false;
     }
-    private UIElement ReadOnlyHabits(DateOnly date, double size = 7)
+    private UIElement ReadOnlyHabits(DateOnly date, double size = 7, bool paleEmpty = false)
     {
         var indicators = _vm.HabitsOn(date); var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, MinHeight = size + 2 };
-        foreach (var h in indicators) { var dot = Ui.Dot(h.Color, h.Completed, size); Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(dot, h.Name); row.Children.Add(dot); }
+        foreach (var h in indicators)
+        {
+            var dot = Ui.Dot(paleEmpty && !h.Completed ? Palette.PaleHabitColor(h.Color) : h.Color, h.Completed || paleEmpty, size);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(dot, h.Name); row.Children.Add(dot);
+        }
         return row;
     }
 }

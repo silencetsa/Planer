@@ -16,12 +16,30 @@ internal static class UiSnapshot
     public static async Task SaveScenarioAsync(FrameworkElement view, string path, string scenario, PlannerViewModel vm)
     {
         await PrepareAsync(view);
-        if (scenario == "Notes") { vm.ToggleNotesCommand.Execute(null); await SaveAsync(view, path); return; }
+        if (scenario == "Notes") { vm.Notes = "Оставить время для прогулки и отдыха.\nВажные мысли этой недели."; vm.ToggleNotesCommand.Execute(null); await SaveAsync(view, path); return; }
+        if (scenario is "PaymentNormal" or "PaymentHover" or "PaymentDone")
+        {
+            var paymentButton = Descendants<Button>(view).First(b => b.Tag is PaymentOccurrence);
+            if (scenario == "PaymentDone")
+            {
+                var payment = (PaymentOccurrence)paymentButton.Tag;
+                vm.PaymentCommand.Execute(new PaymentToggle(payment.PaymentId, payment.Date)); await PrepareAsync(view);
+                paymentButton = Descendants<Button>(view).First(b => b.Tag is PaymentOccurrence p && p.PaymentId == payment.PaymentId && p.Date == payment.Date);
+            }
+            else if (scenario == "PaymentHover") VisualStateManager.GoToState(paymentButton, "PointerOver", false);
+            await SaveAsync(paymentButton, path); return;
+        }
         if (scenario == "DayPlus")
         {
             var name = $"Создать задачу: {vm.Today:dd.MM}, утро";
             var plus = Descendants<Button>(view).First(b => Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(b) == name);
-            plus.Visibility = Visibility.Visible; await SaveAsync(view, path); return;
+            var payment = Descendants<Button>(view).FirstOrDefault(b => b.Tag is PaymentOccurrence p && p.Date == vm.Today);
+            var before = payment?.TransformToVisual(view).TransformPoint(new Windows.Foundation.Point());
+            plus.Visibility = Visibility.Visible; await PrepareAsync(view);
+            var after = payment?.TransformToVisual(view).TransformPoint(new Windows.Foundation.Point());
+            if (before is { } b && after is { } a && (Math.Abs(b.X - a.X) > .1 || Math.Abs(b.Y - a.Y) > .1))
+                throw new InvalidOperationException("Платёж сместился при появлении плюса");
+            await SaveAsync(view, path); return;
         }
         if (scenario == "YearHabits" || scenario == "YearMood")
         {

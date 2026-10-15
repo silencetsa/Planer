@@ -100,6 +100,12 @@ public sealed class PlannerState
 public static class Palette
 {
     public static readonly string[] Elements = ["#FF6961", "#FFB480", "#FAF03D", "#66E37E", "#08CAD1", "#59ADF6", "#9D94FF", "#C780E8"];
+    public static readonly string[] PaleElements = ["#FFDFDD", "#FFEFE3", "#FDFBD6", "#E0F8E5", "#CAF4F5", "#DBEEFD", "#EAE8FF", "#F3E3FA"];
+    public static string PaleHabitColor(string color)
+    {
+        var index = Array.FindIndex(Elements, c => c.Equals(HabitColor(color), StringComparison.OrdinalIgnoreCase));
+        return index >= 0 ? PaleElements[index] : "#F5F5F5";
+    }
     // Older databases used the text palette. Resolve its six darker colors for display
     // without rewriting habits, activation dates or historical check marks.
     public static string HabitColor(string storedColor) => storedColor.ToUpperInvariant() switch

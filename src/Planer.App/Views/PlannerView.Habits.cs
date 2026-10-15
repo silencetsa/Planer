@@ -10,11 +10,13 @@ public sealed partial class PlannerView
 {
     private UIElement ManagementHeader()
     {
-        var row = new Grid { ColumnSpacing = 14 }; row.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        var row = new Grid { ColumnSpacing = 14, RowSpacing = 16 }; row.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        row.RowDefinitions.Add(new() { Height = GridLength.Auto }); row.RowDefinitions.Add(new() { Height = GridLength.Auto });
         Ui.Add(row, Ui.Button(Ui.Icon("\uE72B", 20), _vm.NavigateCommand, PlannerScreen.Week, "Вернуться в планер недели"));
         Ui.Add(row, Ui.Text(_vm.Period, 26, Ui.Accent, true), 1);
-        var create = Ui.Button(Ui.Text("Создать", 14, "#FFFFFF", true), _vm.Screen == PlannerScreen.Habits ? _vm.CreateHabitCommand : _vm.CreatePaymentCommand);
-        create.Background = Ui.Brush(Ui.Accent); create.Padding = new(22, 9, 22, 9); Ui.Add(row, create, 2); return row;
+        var create = Ui.PeriodButton("Создать", _vm.Screen == PlannerScreen.Habits ? _vm.CreateHabitCommand : _vm.CreatePaymentCommand);
+        create.MinWidth = 166; create.MinHeight = 48; create.Padding = new(24, 11, 24, 11); create.HorizontalAlignment = HorizontalAlignment.Left;
+        Ui.Add(row, create, row: 1, span: 2); return row;
     }
     private UIElement HabitsBoard()
     {
@@ -28,7 +30,7 @@ public sealed partial class PlannerView
             if (previousGroup != active) { content.Children.Add(Ui.Text(active ? "Активные" : "Завершённые", 18, Ui.Accent, true)); previousGroup = active; }
             var row = new Grid { ColumnSpacing = 20 }; row.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             Ui.Add(row, Ui.Dot(Palette.HabitColor(h.Color), true, 22));
-            var info = new StackPanel { Spacing = 5 }; info.Children.Add(Ui.Text(h.Name, 19, Ui.Ink, true));
+            var info = new StackPanel { Spacing = 5 }; info.Children.Add(Ui.Text(h.Name, 19, Ui.Ink, light: true));
             info.Children.Add(Ui.Text($"Создана {h.Created:dd.MM.yyyy}   ·   Активных дней: {h.ActiveDays(_vm.Today)}   ·   Успешных отметок: {_vm.HabitSuccess(h.Id)}", 14, Ui.Muted));
             if (h.Ended is { } ended) info.Children.Add(Ui.Text($"Завершена {ended:dd.MM.yyyy}", 14, Ui.Muted));
             Ui.Add(row, info, 1);

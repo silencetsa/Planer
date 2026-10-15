@@ -27,15 +27,16 @@ public static partial class Ui
     public const int SmallTextSpacing = 25;
     public static FontFamily PlannerFont { get; } = new("ms-appx:///Assets/Fonts/HelveticaNeue-Roman.otf#Helvetica Neue");
     public static FontFamily PlannerFontBold { get; } = new("ms-appx:///Assets/Fonts/HelveticaNeue-Bold.otf#Helvetica Neue");
+    public static FontFamily PlannerFontLight { get; } = new("ms-appx:///Assets/Fonts/HelveticaNeue-Light.otf#Helvetica Neue");
     public static SolidColorBrush Brush(string hex)
     {
         hex = hex.TrimStart('#'); byte a = 255;
         if (hex.Length == 8) { a = Convert.ToByte(hex[..2], 16); hex = hex[2..]; }
         return new(Color.FromArgb(a, Convert.ToByte(hex[..2], 16), Convert.ToByte(hex[2..4], 16), Convert.ToByte(hex[4..6], 16)));
     }
-    public static TextBlock Text(string value, double size = 13, string color = Ink, bool bold = false) => new()
+    public static TextBlock Text(string value, double size = 13, string color = Ink, bool bold = false, bool light = false) => new()
     {
-        Text = value, FontFamily = bold ? PlannerFontBold : PlannerFont, FontSize = size, Foreground = Brush(color), FontWeight = bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
+        Text = value, FontFamily = bold ? PlannerFontBold : light ? PlannerFontLight : PlannerFont, FontSize = size, Foreground = Brush(color), FontWeight = bold ? Microsoft.UI.Text.FontWeights.Bold : light ? Microsoft.UI.Text.FontWeights.Light : Microsoft.UI.Text.FontWeights.Normal,
         CharacterSpacing = size < GoalTitleSize ? SmallTextSpacing : 0,
         VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap
     };
@@ -47,6 +48,11 @@ public static partial class Ui
         return b;
     }
     public static Border Card(UIElement child, double radius = 17) => new() { Background = Brush("#FFFFFF"), CornerRadius = new(radius), Child = child, Padding = new(13) };
+    public static HandButton PeriodButton(string title, ICommand? command = null, string? name = null)
+    {
+        var button = Button(Text(title, GoalTitleSize, Accent, true), command, tooltip: name);
+        button.Background = Brush("#F3E3FA"); button.Padding = new(12, 7, 12, 7); return button;
+    }
     public static Grid Grid(int columns, int rows = 1, double gap = 10)
     {
         var g = new Grid { ColumnSpacing = gap, RowSpacing = gap };
@@ -85,7 +91,7 @@ public static partial class Ui
     public static Image PartIcon(DayPart part) => OriginalIcon(part switch
     {
         DayPart.Morning => "GrayPanelAlt.png", DayPart.Afternoon => "GrayPanel.png", _ => "GrayAccent.png"
-    }, 17);
+    }, part == DayPart.Evening ? 15 : 17);
     public static Canvas PeriodArrow(bool forward)
     {
         var canvas = new Canvas { Width = 24, Height = 24 };

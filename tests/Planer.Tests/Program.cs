@@ -337,6 +337,12 @@ Test("Old SQLite tasks migrate with no repeat and keep their IDs and dates", () 
     var task = e.State.Tasks.Single(); Equal(id, task.Id); Equal(Repeat.None, task.Repeat); Equal(true, task.Completed); Equal(0, e.State.TaskSeries.Count);
     Equal<DateOnly?>(new(2026, 10, 13), task.Date); Directory.Delete(dir, true);
 });
+Test("Pale habit palette retains element identity including legacy colors", () =>
+{
+    Equal("#E0F8E5", Palette.PaleHabitColor("#0DBA30")); Equal("#DBEEFD", Palette.PaleHabitColor("#59ADF6"));
+    Equal("#F5F5F5", Palette.PaleHabitColor("#99908C"));
+});
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;
 

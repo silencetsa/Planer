@@ -63,8 +63,7 @@ public sealed partial class PlannerView : UserControl
         menu.Items.Add(new MenuFlyoutItem { Text = "Платежи", Command = _vm.NavigateCommand, CommandParameter = PlannerScreen.Payments, Icon = new FontIcon { Glyph = "\uE8C7" } });
         settings.Flyout = menu; left.Children.Add(settings);
         left.Children.Add(Ui.Button(Ui.PeriodArrow(false), _vm.PreviousCommand, tooltip: "Предыдущий период"));
-        var period = Ui.Button(Ui.Text(_vm.Period, Ui.GoalTitleSize, Ui.Accent, true), _vm.ParentCommand, tooltip: "Открыть календарь");
-        period.Background = Ui.Brush("#F3E3FA"); period.Padding = new(12, 7, 12, 7); left.Children.Add(period);
+        var period = Ui.PeriodButton(_vm.Period, _vm.ParentCommand, "Открыть календарь"); left.Children.Add(period);
         left.Children.Add(Ui.Button(Ui.PeriodArrow(true), _vm.NextCommand, tooltip: "Следующий период"));
         var today = Ui.Button(Ui.Text("Сегодня", 11, Ui.Muted), _vm.TodayCommand, tooltip: "Текущая неделя"); today.Margin = new(5, 0, 0, 0); left.Children.Add(today);
         Ui.Add(header, left);
@@ -118,14 +117,15 @@ public sealed partial class PlannerView : UserControl
     {
         var layout = new Grid { ColumnSpacing = 6 };
         layout.ColumnDefinitions.Add(new() { Width = new(17) }); layout.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        var icon = Ui.PartIcon(part); icon.VerticalAlignment = VerticalAlignment.Top; icon.Margin = new(0, 2, 0, 0); Ui.Add(layout, icon);
+        var icon = Ui.PartIcon(part); icon.HorizontalAlignment = HorizontalAlignment.Center; icon.VerticalAlignment = VerticalAlignment.Top; icon.Margin = new(0, 2, 0, 0); Ui.Add(layout, icon);
         var content = new StackPanel { Spacing = 4 };
+        // Static bills precede the editable task list; its insertion affordance cannot move them.
+        if (part == DayPart.Morning) foreach (var payment in _vm.PaymentsOn(date)) content.Children.Add(PaymentBlock(payment));
         foreach (var task in _vm.TasksOn(date, part)) content.Children.Add(TaskBlock(task));
         var plus = Ui.Button(Ui.Icon("\uE710", 13), _vm.CreateTaskCommand, new TaskLocation(date, part), $"Создать задачу: {date:dd.MM}, {PartName(part)}");
         plus.Height = 28; plus.Padding = new(0); plus.HorizontalAlignment = HorizontalAlignment.Stretch;
         plus.Visibility = Visibility.Collapsed; plus.Background = Ui.Brush(Ui.Paper); content.Children.Add(plus);
         plus.RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => owner.SetInsertionSection((int)part, plus.Visibility == Visibility.Visible));
-        if (part == DayPart.Morning) foreach (var payment in _vm.PaymentsOn(date)) content.Children.Add(PaymentBlock(payment));
         var taskArea = new Border { Child = Ui.Scroll(content), BorderBrush = Ui.Brush("#F2F2F2"), BorderThickness = new(0, 0, 0, part == DayPart.Evening ? 0 : 1) };
         Ui.Add(layout, taskArea, 1);
         var border = new Border { Child = layout, Background = Ui.Brush("#00FFFFFF"), MinHeight = 28, Padding = new(0, 5, 0, 3) };
@@ -170,8 +170,11 @@ public sealed partial class PlannerView : UserControl
         var title = Ui.Text(payment.Name, compact ? 12.5 : 14, "#FFFFFF"); title.MaxLines = 1; title.TextTrimming = TextTrimming.CharacterEllipsis; Ui.Add(layout, title, 1);
         Ui.Add(layout, Ui.Text(FormatAmount(payment.Amount), compact ? 14.5 : 16, "#FAF03D", true), 2);
         var button = Ui.Button(layout, _vm.PaymentCommand, new PaymentToggle(payment.PaymentId, payment.Date), $"{payment.Name}: {payment.Amount:N2} ₽ — отметить оплату");
+        button.Tag = payment;
         button.Background = Ui.Brush(payment.Completed ? "#E4CAED" : Ui.Accent); button.Padding = new(5, 4, 5, 4); button.HorizontalAlignment = HorizontalAlignment.Stretch;
-        button.HorizontalContentAlignment = HorizontalAlignment.Stretch; button.CornerRadius = new(4); if (payment.Completed) layout.Opacity = .6; return button;
+        button.HorizontalContentAlignment = HorizontalAlignment.Stretch; button.CornerRadius = new(4);
+        button.Resources["ButtonBackgroundPointerOver"] = button.Background; button.Resources["ButtonBackgroundPressed"] = button.Background;
+        return button;
     }
     private UIElement HabitDots(DateOnly date, bool compact = false)
     {
@@ -179,8 +182,8 @@ public sealed partial class PlannerView : UserControl
         for (int i = 0; i < habits.Count; i++)
         {
             var h = habits[i]; var stack = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
-            if (!compact) { var name = Ui.Text(h.Name, 11, Ui.Muted); name.TextTrimming = TextTrimming.CharacterEllipsis; name.MaxLines = 1; stack.Children.Add(name); }
-            stack.Children.Add(Ui.Dot(h.Color, h.Completed, compact ? 7 : 20));
+            if (!compact) { var name = Ui.Text(h.Name, 11, Ui.Muted, light: true); name.TextTrimming = TextTrimming.CharacterEllipsis; name.MaxLines = 1; stack.Children.Add(name); }
+            stack.Children.Add(Ui.Dot(h.Color, h.Completed, compact ? 7 : 19));
             var button = Ui.Button(stack, _vm.HabitCommand, new HabitToggle(h.HabitId, date), h.Name); button.Padding = new(compact ? 1 : 2); button.HorizontalAlignment = HorizontalAlignment.Stretch; Ui.Add(row, button, i);
         }
         row.MinHeight = compact ? 12 : 43; return row;
@@ -207,7 +210,7 @@ public sealed partial class PlannerView : UserControl
         if (_vm.NotesVisible)
         {
             var notes = new TextBox { Text = _vm.Notes, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, BorderThickness = new(0), Background = Ui.Brush("#FFFFFF"), PlaceholderText = _vm.Screen == PlannerScreen.Month ? "Заметки этого месяца…" : "Заметки этой недели…",
-                VerticalAlignment = VerticalAlignment.Stretch, FontSize = 12, Padding = new(0), Foreground = Ui.Brush(Ui.Ink) };
+                VerticalAlignment = VerticalAlignment.Stretch, FontSize = 12, FontStyle = Windows.UI.Text.FontStyle.Italic, Padding = new(0), Foreground = Ui.Brush(Ui.Ink) };
             notes.TextChanged += (_, _) => _vm.Notes = notes.Text; Ui.Add(layout, notes, row: 1);
         }
         else

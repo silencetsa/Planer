@@ -13,9 +13,9 @@ public sealed partial class PlannerView
     private static string FormatAmount(decimal amount) => amount.ToString(amount == decimal.Truncate(amount) ? "N0" : "N2", PlannerViewModel.Russian) + " ₽";
     private UIElement PaymentsBoard()
     {
-        var outer = new Grid { RowSpacing = 12 }; outer.RowDefinitions.Add(new() { Height = GridLength.Auto }); outer.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
+        var outer = new Grid { RowSpacing = 12 }; outer.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) }); outer.RowDefinitions.Add(new() { Height = GridLength.Auto });
         var switchList = Ui.Button(Ui.Text(_vm.ShowCompletedPayments ? "← Активные платежи" : "Завершённые платежи", 13, Ui.Orange));
-        switchList.HorizontalAlignment = HorizontalAlignment.Left; switchList.Click += (_, _) => { _vm.ShowCompletedPayments = !_vm.ShowCompletedPayments; _vm.Refresh(); }; Ui.Add(outer, switchList);
+        switchList.HorizontalAlignment = HorizontalAlignment.Left; switchList.Click += (_, _) => { _vm.ShowCompletedPayments = !_vm.ShowCompletedPayments; _vm.Refresh(); }; Ui.Add(outer, switchList, row: 1);
         var list = new StackPanel { Spacing = 14, HorizontalAlignment = HorizontalAlignment.Stretch };
         var payments = _vm.Payments.Where(p => _vm.ShowCompletedPayments != p.IsActive(_vm.Today)).Select(p => (Payment: p, Revision: _vm.PaymentRevision(p)!))
             .OrderByDescending(p => FrequencyRank(p.Revision.Repeat)).ThenByDescending(p => p.Revision.Amount).ToList();
@@ -39,7 +39,7 @@ public sealed partial class PlannerView
             }
             var total = Ui.Text("Итого: " + FormatAmount(group.Sum(p => p.Revision.Amount)), 17, Ui.Accent, true); total.HorizontalAlignment = HorizontalAlignment.Right; total.Margin = new(0, 0, 13, 10); list.Children.Add(total);
         }
-        Ui.Add(outer, Ui.Scroll(list), row: 1); return outer;
+        Ui.Add(outer, Ui.Scroll(list)); return outer;
     }
     private async void EditPayment(object? sender, Payment? payment)
     {

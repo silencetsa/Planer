@@ -40,7 +40,7 @@ public sealed partial class PlannerView
                 var mood = _vm.MoodOn(date); dateRow.Children.Add(Ui.Dot(mood is { } m ? Palette.MoodColors[(int)m] : "#E8E3E0", mood is not null, 12));
             }
             indicators.Children.Add(dateRow);
-            if (_vm.YearMode != 1) indicators.Children.Add(ReadOnlyHabits(date, 5));
+            if (_vm.YearMode != 1) indicators.Children.Add(ReadOnlyHabits(date, 5, paleEmpty: true));
             var cell = new Border { Child = indicators, CornerRadius = new(3), BorderBrush = Ui.Brush("#FAF03D"), BorderThickness = new(date == _vm.Today ? 1 : 0), Background = Ui.Brush("#00FFFFFF"), Padding = new(1) };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(cell, date.ToString("d MMMM yyyy", PlannerViewModel.Russian));
             Ui.Add(days, cell, i % 7, i / 7);
