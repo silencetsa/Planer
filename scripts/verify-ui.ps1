@@ -13,6 +13,8 @@ $planerCases = @(
     @{ Name='payments'; View='Payments' }, @{ Name='today'; View='Today' },
     @{ Name='habits-actions'; View='Habits'; Scenario='HabitsActions' },
     @{ Name='payments-actions'; View='Payments'; Scenario='PaymentsActions' },
+    @{ Name='payments-actions-large'; View='Payments'; Scenario='PaymentsActions'; Large=$true },
+    @{ Name='payments-actions-completed'; View='Payments'; Scenario='PaymentsActionsCompleted'; Separate=$true },
     @{ Name='layout-stress'; View='Week'; Scenario='LayoutStress'; Separate=$true; Timeout=45000 },
     @{ Name='today-layout-stress'; View='Today'; Scenario='TodayLayoutStress'; Separate=$true; Timeout=30000 },
     @{ Name='layout-recovery'; View='Week'; Scenario='LayoutRecovery'; Separate=$true; Timeout=30000 },

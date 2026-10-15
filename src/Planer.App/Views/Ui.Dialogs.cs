@@ -37,6 +37,11 @@ public static partial class Ui
         foreach (var dialog in OpenDialogs.ToArray()) dialog.Hide();
     }
     public static TextBlock FieldTitle(string title) => Text(title, 15, Blue, true);
+    public static HandButton ActionButton(string title, string background, string foreground) => new()
+    {
+        Content = title, Style = DialogButtonStyle(background, foreground, 1),
+        MinWidth = 0, MinHeight = 0, BorderThickness = new(0)
+    };
     public static Grid PriorityRow(string left, PrioritySwitch toggle, string right)
     {
         var row = Grid(3, gap: 12); row.ColumnDefinitions[1].Width = GridLength.Auto;
@@ -115,6 +120,7 @@ public static partial class Ui
         style.Setters.Add(new Setter(Control.ForegroundProperty, Brush(foreground)));
         style.Setters.Add(new Setter(Control.FontFamilyProperty, PlannerFont));
         style.Setters.Add(new Setter(Control.FontSizeProperty, 14d * scale));
+        style.Setters.Add(new Setter(Control.FontWeightProperty, Microsoft.UI.Text.FontWeights.Normal));
         style.Setters.Add(new Setter(Control.CharacterSpacingProperty, SmallTextSpacing));
         style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(14 * scale, 7 * scale, 14 * scale, 7 * scale)));
         style.Setters.Add(new Setter(Control.CornerRadiusProperty, new CornerRadius(5)));

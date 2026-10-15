@@ -21,19 +21,29 @@ internal static class UiSnapshot
             await CheckLayoutStressAsync(view, path, vm, scenario == "TodayLayoutStress"); return;
         }
         if (scenario == "LayoutRecovery") { await CheckLayoutRecoveryAsync(view, path, vm); return; }
-        if (scenario is "HabitsActions" or "PaymentsActions")
+        if (scenario is "HabitsActions" or "PaymentsActions" or "PaymentsActionsCompleted")
         {
+            if (scenario == "PaymentsActionsCompleted")
+            {
+                vm.ShowCompletedPayments = true; vm.Refresh(); await PrepareAsync(view);
+            }
             var create = Descendants<Button>(view).Single(b => b.Name == "CreateManagementButton");
             var position = create.TransformToVisual(view).TransformPoint(new Windows.Foundation.Point());
             if (position.X < view.ActualWidth / 2 || position.Y > 100 || view.ActualWidth - position.X - create.ActualWidth < 10)
                 throw new InvalidOperationException("Создать должна находиться справа в заголовке, с отступом от края");
-            if (scenario == "PaymentsActions")
+            if (scenario is "PaymentsActions" or "PaymentsActionsCompleted")
             {
                 var completed = Descendants<Button>(view).Single(b => b.Name == "CompletedPaymentsButton");
                 var caption = Descendants<TextBlock>(completed).First();
                 if (completed.Background is not SolidColorBrush { Color: { R: 255, G: 238, B: 227 } }
                     || caption.Foreground is not SolidColorBrush { Color: { R: 255, G: 124, B: 5 } })
                     throw new InvalidOperationException("Кнопка завершённых платежей не использует оранжевую палитру");
+                if (caption.FontSize != 14 || caption.FontWeight.Weight != 400 || completed.Padding != new Thickness(14, 7, 14, 7)
+                    || completed.ActualHeight >= create.ActualHeight)
+                    throw new InvalidOperationException("Кнопка завершённых платежей должна использовать компактный стиль Сохранить/Отмена");
+                var bottom = completed.TransformToVisual(view).TransformPoint(new Windows.Foundation.Point());
+                if (bottom.X > 50 || bottom.Y < view.ActualHeight / 2)
+                    throw new InvalidOperationException("Кнопка завершённых платежей должна оставаться внизу слева");
             }
             await SaveAsync(view, path); return;
         }
