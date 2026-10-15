@@ -1,4 +1,4 @@
-param([string]$Executable = '')
+param([string]$Executable = '', [string[]]$Only = @())
 $ErrorActionPreference = 'Stop'
 $planerRoot = Split-Path -Parent $PSScriptRoot
 if (!$Executable) { $Executable = Join-Path $planerRoot 'src\Planer.App\bin\x64\Release\net10.0-windows10.0.26100.0\win-x64\Planer.App.exe' }
@@ -18,6 +18,12 @@ $planerCases = @(
     @{ Name='week-notes'; View='Week'; Scenario='Notes' },
     @{ Name='month-notes'; View='Month'; Scenario='Notes' },
     @{ Name='day-plus'; View='Week'; Scenario='DayPlus' },
+    @{ Name='period-calendar'; View='Week'; Scenario='Calendar' },
+    @{ Name='period-calendar-large'; View='Week'; Scenario='Calendar'; Large=$true },
+    @{ Name='period-calendar-navigation'; View='Week'; Scenario='CalendarNavigate' },
+    @{ Name='calendar-open-year'; View='Week'; Scenario='CalendarOpenYear' },
+    @{ Name='calendar-open-month'; View='Week'; Scenario='CalendarOpenMonth' },
+    @{ Name='calendar-open-week'; View='Week'; Scenario='CalendarOpenWeek' },
     @{ Name='payment-normal'; View='Week'; Scenario='PaymentNormal' },
     @{ Name='payment-hover'; View='Week'; Scenario='PaymentHover' },
     @{ Name='payment-done'; View='Week'; Scenario='PaymentDone'; Separate=$true },
@@ -33,6 +39,7 @@ $planerCases = @(
     @{ Name='task-preview'; View='Week'; Preview=$true },
     @{ Name='task-preview-large'; View='Week'; Preview=$true; Large=$true }
 )
+if ($Only.Count -gt 0) { $planerCases = @($planerCases | Where-Object { $_.Name -in $Only }) }
 foreach ($planerCase in $planerCases) {
     $planerScreen = $planerCase.Name
     $planerImagePath = Join-Path $planerImageDir ($planerScreen + '.png')

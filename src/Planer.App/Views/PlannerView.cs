@@ -63,7 +63,8 @@ public sealed partial class PlannerView : UserControl
         menu.Items.Add(new MenuFlyoutItem { Text = "Платежи", Command = _vm.NavigateCommand, CommandParameter = PlannerScreen.Payments, Icon = new FontIcon { Glyph = "\uE8C7" } });
         settings.Flyout = menu; left.Children.Add(settings);
         left.Children.Add(Ui.Button(Ui.PeriodArrow(false), _vm.PreviousCommand, tooltip: "Предыдущий период"));
-        var period = Ui.PeriodButton(_vm.Period, _vm.ParentCommand, "Открыть календарь"); left.Children.Add(period);
+        var period = Ui.PeriodButton(_vm.Period, _vm.ParentCommand, "Открыть календарь");
+        period.Name = "PeriodButton"; period.ContextFlyout = PeriodCalendar(); left.Children.Add(period);
         left.Children.Add(Ui.Button(Ui.PeriodArrow(true), _vm.NextCommand, tooltip: "Следующий период"));
         var today = Ui.Button(Ui.Text("Сегодня", 11, Ui.Muted), _vm.TodayCommand, tooltip: "Текущая неделя"); today.Margin = new(5, 0, 0, 0); left.Children.Add(today);
         Ui.Add(header, left);

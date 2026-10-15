@@ -16,6 +16,32 @@ internal static class UiSnapshot
     public static async Task SaveScenarioAsync(FrameworkElement view, string path, string scenario, PlannerViewModel vm)
     {
         await PrepareAsync(view);
+        if (scenario.StartsWith("Calendar", StringComparison.Ordinal))
+        {
+            var period = Descendants<Button>(view).First(b => b.Name == "PeriodButton"); var calendar = (Flyout)period.ContextFlyout;
+            calendar.ShowAt(period); await Task.Delay(100); var calendarBody = (FrameworkElement)calendar.Content; await PrepareAsync(calendarBody);
+            if (scenario == "Calendar") { await SaveAsync(calendarBody, path); return; }
+            var selected = vm.SelectedDate;
+            if (scenario == "CalendarNavigate")
+            {
+                Descendants<Button>(calendarBody).First(b => b.Name == "CalendarYearNext").Command.Execute(null);
+                await PrepareAsync(calendarBody);
+                Descendants<Button>(calendarBody).First(b => b.Name == "CalendarMonthNext").Command.Execute(null);
+                await PrepareAsync(calendarBody);
+                await SaveAsync(calendarBody, path); return;
+            }
+            var link = scenario switch
+            {
+                "CalendarOpenYear" => Descendants<Button>(calendarBody).First(b => b.Name == "CalendarYear"),
+                "CalendarOpenMonth" => Descendants<Button>(calendarBody).First(b => b.Name == "CalendarMonth"),
+                "CalendarOpenWeek" => Descendants<Button>(calendarBody).First(b => b.Tag is DateOnly d && d.Month == selected.Month && d.Day == 20),
+                _ => throw new ArgumentException("Неизвестный сценарий календаря")
+            };
+            link.Command.Execute(null);
+            var expected = scenario == "CalendarOpenYear" ? PlannerScreen.Year : scenario == "CalendarOpenMonth" ? PlannerScreen.Month : PlannerScreen.Week;
+            if (vm.Screen != expected || (expected == PlannerScreen.Week && vm.SelectedDate.Day != 20)) throw new InvalidOperationException("Неверный переход календаря");
+            await SaveAsync(view, path); return;
+        }
         if (scenario == "Notes") { vm.Notes = "Оставить время для прогулки и отдыха.\nВажные мысли этой недели."; vm.ToggleNotesCommand.Execute(null); await SaveAsync(view, path); return; }
         if (scenario is "PaymentNormal" or "PaymentHover" or "PaymentDone")
         {
