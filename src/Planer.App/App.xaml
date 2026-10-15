@@ -10,7 +10,27 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
                 <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
-            <FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Assets/Fonts/helvetica_regular.otf#Helvetica</FontFamily>
+            <FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Assets/Fonts/HelveticaNeue-Roman.otf#Helvetica Neue</FontFamily>
+            <Style TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
+                <Setter Property="CharacterSpacing" Value="25" />
+                <Setter Property="Foreground" Value="#99908C" />
+            </Style>
+            <Style TargetType="ComboBox" BasedOn="{StaticResource DefaultComboBoxStyle}">
+                <Setter Property="CharacterSpacing" Value="25" />
+                <Setter Property="Foreground" Value="#99908C" />
+            </Style>
+            <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DefaultComboBoxItemStyle}">
+                <Setter Property="CharacterSpacing" Value="25" />
+                <Setter Property="Foreground" Value="#99908C" />
+            </Style>
+            <Style TargetType="CalendarDatePicker" BasedOn="{StaticResource DefaultCalendarDatePicker}">
+                <Setter Property="CharacterSpacing" Value="25" />
+                <Setter Property="Foreground" Value="#99908C" />
+            </Style>
+            <Style TargetType="MenuFlyoutItem" BasedOn="{StaticResource DefaultMenuFlyoutItemStyle}">
+                <Setter Property="CharacterSpacing" Value="25" />
+                <Setter Property="Foreground" Value="#99908C" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

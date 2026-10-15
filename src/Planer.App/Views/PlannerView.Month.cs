@@ -58,7 +58,7 @@ public sealed partial class PlannerView
     private UIElement ReadOnlyHabits(DateOnly date, double size = 7)
     {
         var indicators = _vm.HabitsOn(date); var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, MinHeight = size + 2 };
-        foreach (var h in indicators) { var dot = Ui.Dot(h.Color, h.Completed, size); ToolTipService.SetToolTip(dot, h.Name); row.Children.Add(dot); }
+        foreach (var h in indicators) { var dot = Ui.Dot(h.Color, h.Completed, size); Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(dot, h.Name); row.Children.Add(dot); }
         return row;
     }
 }

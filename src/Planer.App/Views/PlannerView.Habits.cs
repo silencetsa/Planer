@@ -28,9 +28,9 @@ public sealed partial class PlannerView
             if (previousGroup != active) { content.Children.Add(Ui.Text(active ? "Активные" : "Завершённые", 18, Ui.Accent, true)); previousGroup = active; }
             var row = new Grid { ColumnSpacing = 20 }; row.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             Ui.Add(row, Ui.Dot(Palette.HabitColor(h.Color), true, 22));
-            var info = new StackPanel { Spacing = 5 }; info.Children.Add(Ui.Text(h.Name, 17, Ui.Ink, true));
-            info.Children.Add(Ui.Text($"Создана {h.Created:dd.MM.yyyy}   ·   Активных дней: {h.ActiveDays(_vm.Today)}   ·   Успешных отметок: {_vm.HabitSuccess(h.Id)}", 12, Ui.Muted));
-            if (h.Ended is { } ended) info.Children.Add(Ui.Text($"Завершена {ended:dd.MM.yyyy}", 12, Ui.Muted));
+            var info = new StackPanel { Spacing = 5 }; info.Children.Add(Ui.Text(h.Name, 19, Ui.Ink, true));
+            info.Children.Add(Ui.Text($"Создана {h.Created:dd.MM.yyyy}   ·   Активных дней: {h.ActiveDays(_vm.Today)}   ·   Успешных отметок: {_vm.HabitSuccess(h.Id)}", 14, Ui.Muted));
+            if (h.Ended is { } ended) info.Children.Add(Ui.Text($"Завершена {ended:dd.MM.yyyy}", 14, Ui.Muted));
             Ui.Add(row, info, 1);
             if (active)
             {
@@ -56,8 +56,8 @@ public sealed partial class PlannerView
             colorButtons.Add(b); colors.Children.Add(b);
         }
         var error = Ui.Text("", 12, "#BD3026");
-        var fields = new StackPanel { Spacing = 14, MinWidth = 340 }; fields.Children.Add(name); fields.Children.Add(Ui.Text("Цвет", 13)); fields.Children.Add(colors); fields.Children.Add(error);
-        var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Light, Title = "Новая привычка", Content = fields, PrimaryButtonText = "Создать", CloseButtonText = "Отмена", DefaultButton = ContentDialogButton.Primary };
+        var fields = new StackPanel { Spacing = 14, MinWidth = 340 }; fields.Children.Add(name); fields.Children.Add(Ui.FieldTitle("Цвет")); fields.Children.Add(colors); fields.Children.Add(error);
+        var dialog = Ui.Dialog(XamlRoot, "Новая привычка", fields, primary: "Создать", scale: _scaleHost.ScaleFactor);
         dialog.PrimaryButtonClick += (_, e) =>
         {
             if (string.IsNullOrWhiteSpace(name.Text) || new StringInfo(name.Text.Trim()).LengthInTextElements > 13) { error.Text = "Название — от 1 до 13 знаков"; e.Cancel = true; }
@@ -68,9 +68,9 @@ public sealed partial class PlannerView
     {
         if (!OwnsDialogs) return;
         var name = _vm.Habits.First(h => h.Id == id).Name;
-        var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Light, Title = $"Завершить привычку «{name}»?",
-            Content = "Точки исчезнут начиная с сегодняшнего дня. Прошлые отметки сохранятся. Для нового начала потребуется создать новую привычку.",
-            PrimaryButtonText = "Завершить", CloseButtonText = "Отмена", DefaultButton = ContentDialogButton.Close };
+        var dialog = Ui.Dialog(XamlRoot, $"Завершить привычку «{name}»?",
+            Ui.Text("Точки исчезнут начиная с сегодняшнего дня. Прошлые отметки сохранятся. Для нового начала потребуется создать новую привычку.", 14, Ui.Muted),
+            primary: "Завершить", scale: _scaleHost.ScaleFactor, defaultClose: true);
         if (await dialog.ShowAsync() == ContentDialogResult.Primary) _vm.FinishHabit(id);
     }
 }

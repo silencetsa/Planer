@@ -14,13 +14,16 @@ public sealed partial class PlannerView : UserControl
     private readonly PlannerViewModel _vm;
     private readonly bool _floating;
     private readonly Grid _root = new();
+    private readonly PlannerScaleHost _scaleHost;
     private DateTime _suppressClicksUntil;
     private bool _taskDragInProgress;
     private bool _subscribed;
     public PlannerView(PlannerViewModel vm, bool floating = false)
     {
         _vm = vm; _floating = floating; RequestedTheme = ElementTheme.Light; DataContext = vm; FontFamily = Ui.PlannerFont;
-        Background = Ui.Brush(Ui.Paper); Content = _root;
+        Background = Ui.Brush(Ui.Paper); _scaleHost = new(_root, floating); Content = _scaleHost;
+        _root.AllowDrop = true;
+        _root.AddHandler(DragOverEvent, new DragEventHandler((_, args) => HideDragLabels(args)), true);
         Loaded += (_, _) => { Subscribe(); Render(); }; Unloaded += (_, _) => Unsubscribe();
     }
     private void Subscribe()
@@ -72,7 +75,7 @@ public sealed partial class PlannerView : UserControl
         var parent = new Grid { ColumnSpacing = 10, Margin = new(100, 0, 0, 0) }; parent.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); parent.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         string parentLabel = _vm.Screen == PlannerScreen.Week ? "Цель месяца" : "Цель года";
         var parentTitle = Ui.Text(parentLabel, 15, Ui.Accent, true); parentTitle.TextLineBounds = TextLineBounds.Tight; Ui.Add(parent, parentTitle);
-        var parentText = Ui.Text(string.IsNullOrEmpty(_vm.ParentGoal) ? (_vm.Screen == PlannerScreen.Week ? "Задаётся в планере месяца" : "Задаётся в планере года") : _vm.ParentGoal, 13, "#AA8800");
+        var parentText = Ui.Text(string.IsNullOrEmpty(_vm.ParentGoal) ? (_vm.Screen == PlannerScreen.Week ? "Задаётся в планере месяца" : "Задаётся в планере года") : _vm.ParentGoal, 13, Palette.TaskForegrounds[1]);
         Ui.Add(parent, new Border { Background = Ui.Brush("#FDFBD6"), CornerRadius = new(3), Padding = new(9, 4, 9, 4), Child = parentText, VerticalAlignment = VerticalAlignment.Center }, 1);
         if (_vm.Screen != PlannerScreen.Year) goals.Children.Add(parent); Ui.Add(header, goals, 1); return header;
     }
@@ -99,7 +102,7 @@ public sealed partial class PlannerView : UserControl
         Ui.Add(top, moods, 1); Ui.Add(inner, top);
         var sections = new DaySectionsPanel(Enum.GetValues<DayPart>().Select(part =>
             _vm.TasksOn(date, part).Count > 0 || (part == DayPart.Morning && _vm.PaymentsOn(date).Count > 0)).ToArray());
-        foreach (var part in Enum.GetValues<DayPart>()) sections.Children.Add(DaySection(date, part));
+        foreach (var part in Enum.GetValues<DayPart>()) sections.Children.Add(DaySection(date, part, sections));
         Ui.Add(inner, sections, row: 1); Ui.Add(inner, HabitDots(date), row: 2);
         var card = Ui.Card(inner); card.BorderThickness = new(date == _vm.Today ? 4 : 0); card.BorderBrush = Ui.Brush("#FAF03D");
         if (date == _vm.Today) card.CornerRadius = new(17, 0, 17, 17);
@@ -109,22 +112,26 @@ public sealed partial class PlannerView : UserControl
         pin.Background = Ui.Brush("#FAF03D"); pin.Width = 26; pin.Height = 24; pin.Padding = new(2, 0, 0, 2); pin.HorizontalAlignment = HorizontalAlignment.Right;
         pin.VerticalAlignment = VerticalAlignment.Top; pin.CornerRadius = new(0, 0, 0, 9); outer.Children.Add(pin); return outer;
     }
-    private UIElement DaySection(DateOnly date, DayPart part)
+    private UIElement DaySection(DateOnly date, DayPart part, DaySectionsPanel owner)
     {
         var layout = new Grid { ColumnSpacing = 6 };
         layout.ColumnDefinitions.Add(new() { Width = new(17) }); layout.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         var icon = Ui.PartIcon(part); icon.VerticalAlignment = VerticalAlignment.Top; icon.Margin = new(0, 2, 0, 0); Ui.Add(layout, icon);
         var content = new StackPanel { Spacing = 4 };
         foreach (var task in _vm.TasksOn(date, part)) content.Children.Add(TaskBlock(task));
+        var plus = Ui.Button(Ui.Icon("\uE710", 13), _vm.CreateTaskCommand, new TaskLocation(date, part), $"Создать задачу: {date:dd.MM}, {PartName(part)}");
+        plus.Height = 28; plus.Padding = new(0); plus.HorizontalAlignment = HorizontalAlignment.Stretch;
+        plus.Visibility = Visibility.Collapsed; plus.Background = Ui.Brush(Ui.Paper); content.Children.Add(plus);
+        plus.RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => owner.SetInsertionSection((int)part, plus.Visibility == Visibility.Visible));
         if (part == DayPart.Morning) foreach (var payment in _vm.PaymentsOn(date)) content.Children.Add(PaymentBlock(payment));
         var taskArea = new Border { Child = Ui.Scroll(content), BorderBrush = Ui.Brush("#F2F2F2"), BorderThickness = new(0, 0, 0, part == DayPart.Evening ? 0 : 1) };
         Ui.Add(layout, taskArea, 1);
-        var plus = Ui.Button(Ui.Icon("\uE710", 13), _vm.CreateTaskCommand, new TaskLocation(date, part), $"Создать задачу: {date:dd.MM}, {PartName(part)}");
-        plus.Height = 20; plus.Width = 24; plus.Padding = new(0); plus.HorizontalAlignment = HorizontalAlignment.Right; plus.VerticalAlignment = VerticalAlignment.Top;
-        plus.Opacity = 0; plus.Background = Ui.Brush("#F5F5F5"); Ui.Add(layout, plus, 1);
         var border = new Border { Child = layout, Background = Ui.Brush("#00FFFFFF"), MinHeight = 28, Padding = new(0, 5, 0, 3) };
-        border.PointerEntered += (_, _) => plus.Opacity = 1; border.PointerExited += (_, _) => plus.Opacity = 0;
-        border.GotFocus += (_, _) => plus.Opacity = 1; border.LostFocus += (_, _) => plus.Opacity = 0;
+        bool pointerInside = false;
+        border.PointerEntered += (_, _) => { pointerInside = true; plus.Visibility = Visibility.Visible; };
+        border.PointerExited += (_, _) => { pointerInside = false; if (plus.FocusState == FocusState.Unfocused) plus.Visibility = Visibility.Collapsed; };
+        border.GotFocus += (_, _) => plus.Visibility = Visibility.Visible;
+        border.LostFocus += (_, _) => { if (!pointerInside) plus.Visibility = Visibility.Collapsed; };
         EnableDrop(border, date, part); return border;
     }
     private static string PartName(DayPart part) => part switch { DayPart.Morning => "утро", DayPart.Afternoon => "день", _ => "вечер" };
@@ -138,7 +145,7 @@ public sealed partial class PlannerView : UserControl
             var check = Ui.OriginalIcon("Completed.png", 16); check.HorizontalAlignment = HorizontalAlignment.Right; check.VerticalAlignment = VerticalAlignment.Top; contents.Children.Add(check);
         }
         var button = new DragTaskButton { Content = contents }; button.Padding = new(7, compact ? 3 : 5, 7, compact ? 3 : 5);
-        ToolTipService.SetToolTip(button, task.Description); Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, task.Description);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, task.Description);
         button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         button.Background = Ui.Brush(Palette.TaskBackgrounds[(int)task.Kind]); button.CornerRadius = new(4);
         button.Resources["ButtonBackgroundPointerOver"] = button.Background;
@@ -158,10 +165,10 @@ public sealed partial class PlannerView : UserControl
     {
         var layout = new Grid { ColumnSpacing = 5 }; layout.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); layout.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); layout.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         Ui.Add(layout, Ui.OriginalIcon(payment.Completed ? "Completed.png" : "YellowAccent.png", 18));
-        var title = Ui.Text(payment.Name, compact ? 12 : 13, "#FFFFFF", true); title.MaxLines = 1; title.TextTrimming = TextTrimming.CharacterEllipsis; Ui.Add(layout, title, 1);
-        Ui.Add(layout, Ui.Text(FormatAmount(payment.Amount), compact ? 12 : 13, "#FAF03D", true), 2);
+        var title = Ui.Text(payment.Name, compact ? 12.5 : 14, "#FFFFFF"); title.MaxLines = 1; title.TextTrimming = TextTrimming.CharacterEllipsis; Ui.Add(layout, title, 1);
+        Ui.Add(layout, Ui.Text(FormatAmount(payment.Amount), compact ? 14.5 : 16, "#FAF03D", true), 2);
         var button = Ui.Button(layout, _vm.PaymentCommand, new PaymentToggle(payment.PaymentId, payment.Date), $"{payment.Name}: {payment.Amount:N2} ₽ — отметить оплату");
-        button.Background = Ui.Brush(payment.Completed ? "#E4CAED" : Ui.Accent); button.Padding = new(5, 3, 5, 3); button.HorizontalAlignment = HorizontalAlignment.Stretch;
+        button.Background = Ui.Brush(payment.Completed ? "#E4CAED" : Ui.Accent); button.Padding = new(5, 4, 5, 4); button.HorizontalAlignment = HorizontalAlignment.Stretch;
         button.HorizontalContentAlignment = HorizontalAlignment.Stretch; button.CornerRadius = new(4); if (payment.Completed) layout.Opacity = .6; return button;
     }
     private UIElement HabitDots(DateOnly date, bool compact = false)
@@ -213,7 +220,7 @@ public sealed partial class PlannerView : UserControl
             for (int i = 0; i < 4; i++)
             {
                 var number = Ui.Text(counts.Scheduled[i].ToString(), 21 * scale, Palette.TaskForegrounds[i]); number.HorizontalAlignment = HorizontalAlignment.Center;
-                var pill = new Border { Background = Ui.Brush(Palette.TaskBackgrounds[i]), CornerRadius = new(7 * scale), Width = 43 * scale, Height = 43 * scale, Child = number }; ToolTipService.SetToolTip(pill, descriptions[i]);
+                var pill = new Border { Background = Ui.Brush(Palette.TaskBackgrounds[i]), CornerRadius = new(7 * scale), Width = 43 * scale, Height = 43 * scale, Child = number }; Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(pill, descriptions[i] + ": " + counts.Scheduled[i]);
                 Ui.Add(cross, pill, (positions[i] % 2) * 2, (positions[i] / 2) * 2);
             }
             stack.Children.Add(cross);
@@ -231,7 +238,7 @@ public sealed partial class PlannerView : UserControl
     private void EnableDrop(UIElement target, DateOnly? date, DayPart? part = null)
     {
         target.AllowDrop = true;
-        target.DragOver += (_, args) => { if (args.DataView.Contains(StandardDataFormats.Text)) { args.AcceptedOperation = DataPackageOperation.Move; args.DragUIOverride.Caption = date is null ? "Нужно распределить" : $"{date:dd.MM}"; args.Handled = true; } };
+        target.DragOver += (_, args) => { if (args.DataView.Contains(StandardDataFormats.Text)) { args.AcceptedOperation = DataPackageOperation.Move; HideDragLabels(args); args.Handled = true; } };
         target.Drop += async (_, args) =>
         {
             var deferral = args.GetDeferral();
@@ -245,25 +252,29 @@ public sealed partial class PlannerView : UserControl
             finally { deferral.Complete(); }
         };
     }
+    private static void HideDragLabels(DragEventArgs args)
+    {
+        args.DragUIOverride.IsCaptionVisible = false; args.DragUIOverride.IsGlyphVisible = false;
+    }
     private bool OwnsDialogs => XamlRoot is not null && _floating == App.FloatingOwnsDialogs;
     private async void EditTask(object? sender, TaskEditRequest request)
     {
         if (!OwnsDialogs) return;
         var description = new TextBox { Text = request.Description, Header = "Описание задачи", PlaceholderText = "Что нужно сделать?", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 96, MaxHeight = 250, MaxLength = 10000 };
-        var important = new ToggleSwitch { Header = "Важность", OnContent = "Важное", OffContent = "Неважное", IsOn = request.Important };
-        var urgent = new ToggleSwitch { Header = "Срочность", OnContent = "Срочное", OffContent = "Несрочное", IsOn = request.Urgent };
+        var important = new PrioritySwitch(request.Important, "Важное");
+        var urgent = new PrioritySwitch(request.Urgent, "Срочное");
         var validation = Ui.Text("", 12, "#BD3026"); var contents = new StackPanel { Spacing = 16, MinWidth = 340 }; contents.Children.Add(description);
-        var toggles = Ui.Grid(2); Ui.Add(toggles, important); Ui.Add(toggles, urgent, 1); contents.Children.Add(toggles); contents.Children.Add(validation);
-        var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Light, Title = request.Id is null ? "Новая задача" : "Редактировать задачу", Content = contents,
-            PrimaryButtonText = "Сохранить", CloseButtonText = "Отмена", DefaultButton = ContentDialogButton.Primary };
+        contents.Children.Add(Ui.PriorityRow("Неважное", important, "Важное"));
+        contents.Children.Add(Ui.PriorityRow("Несрочное", urgent, "Срочное")); contents.Children.Add(validation);
+        var dialog = Ui.Dialog(XamlRoot, request.Id is null ? "Новая задача" : "Редактировать задачу", contents, scale: _scaleHost.ScaleFactor);
         dialog.PrimaryButtonClick += (_, args) => { if (string.IsNullOrWhiteSpace(description.Text)) { validation.Text = "Введите описание задачи"; args.Cancel = true; } };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary) _vm.SaveTask(request, description.Text, important.IsOn, urgent.IsOn);
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary) _vm.SaveTask(request, description.Text, important.IsChecked == true, urgent.IsChecked == true);
     }
     private async void ShowError(object? sender, string message) { if (OwnsDialogs) await ErrorDialog(message); }
     private async Task ErrorDialog(string message)
     {
         if (XamlRoot is null) return;
-        try { await new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Light, Title = "Не удалось выполнить действие", Content = message, CloseButtonText = "Понятно" }.ShowAsync(); }
+        try { await Ui.Dialog(XamlRoot, "Не удалось выполнить действие", Ui.Text(message, 14, Ui.Muted), primary: "", close: "Понятно", scale: _scaleHost.ScaleFactor).ShowAsync(); }
         catch (InvalidOperationException) { }
     }
 }

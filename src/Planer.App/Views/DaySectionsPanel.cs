@@ -10,7 +10,28 @@ public sealed class DaySectionsPanel : Panel
     private readonly bool[] _occupied;
     private readonly double[] _naturalHeights = new double[3];
     private const double Gap = 2;
+    private int? _insertionSection;
     public DaySectionsPanel(bool[] occupied) => _occupied = occupied;
+    public void SetInsertionSection(int section, bool visible)
+    {
+        if (visible) _insertionSection = section;
+        else if (_insertionSection == section) _insertionSection = null;
+        InvalidateMeasure();
+    }
+    private double[] Allocate(double availableHeight)
+    {
+        var heights = DaySectionLayout.Allocate(availableHeight, _naturalHeights, _occupied);
+        if (_insertionSection is not { } inserting) return heights;
+        double need = Math.Max(0, _naturalHeights[inserting] - heights[inserting]);
+        // A transient add button can use genuinely unused space even in occupied sections.
+        // Task/payment allocation without the button still follows the empty-section rule.
+        var spare = heights.Select((height, i) => i == inserting ? 0 : Math.Max(0, height - _naturalHeights[i])).ToArray();
+        double available = spare.Sum(), transfer = Math.Min(need, available);
+        if (transfer <= 0) return heights;
+        for (int i = 0; i < heights.Length; i++) heights[i] -= transfer * spare[i] / available;
+        heights[inserting] += transfer;
+        return heights;
+    }
     protected override Size MeasureOverride(Size availableSize)
     {
         double width = 0;
@@ -24,7 +45,7 @@ public sealed class DaySectionsPanel : Panel
         }
         if (!double.IsInfinity(availableSize.Height))
         {
-            var heights = DaySectionLayout.Allocate(Math.Max(0, availableSize.Height - Gap * 2), _naturalHeights, _occupied);
+            var heights = Allocate(Math.Max(0, availableSize.Height - Gap * 2));
             for (int i = 0; i < Children.Count; i++) Children[i].Measure(new Size(availableSize.Width, heights[i]));
         }
         return new Size(double.IsInfinity(availableSize.Width) ? width : availableSize.Width,
@@ -32,7 +53,7 @@ public sealed class DaySectionsPanel : Panel
     }
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var heights = DaySectionLayout.Allocate(Math.Max(0, finalSize.Height - Gap * 2), _naturalHeights, _occupied);
+        var heights = Allocate(Math.Max(0, finalSize.Height - Gap * 2));
         double top = 0;
         for (int i = 0; i < Children.Count; i++)
         {

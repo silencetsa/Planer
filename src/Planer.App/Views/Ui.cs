@@ -17,14 +17,16 @@ public class HandButton : Button
     {
         ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);
         FontFamily = Ui.PlannerFont;
+        CharacterSpacing = Ui.SmallTextSpacing;
     }
 }
-public static class Ui
+public static partial class Ui
 {
-    public const string Accent = "#C780E8", Muted = "#99908C", Ink = "#55504E", Paper = "#F5F5F5";
+    public const string Accent = "#C780E8", Blue = "#59ADF6", Orange = "#FFB480", Muted = "#99908C", Ink = Muted, Paper = "#F5F5F5";
     public const double GoalTitleSize = 21;
-    public static FontFamily PlannerFont { get; } = new("ms-appx:///Assets/Fonts/helvetica_regular.otf#Helvetica");
-    public static FontFamily PlannerFontBold { get; } = new("ms-appx:///Assets/Fonts/helvetica_bold.otf#Helvetica");
+    public const int SmallTextSpacing = 25;
+    public static FontFamily PlannerFont { get; } = new("ms-appx:///Assets/Fonts/HelveticaNeue-Roman.otf#Helvetica Neue");
+    public static FontFamily PlannerFontBold { get; } = new("ms-appx:///Assets/Fonts/HelveticaNeue-Bold.otf#Helvetica Neue");
     public static SolidColorBrush Brush(string hex)
     {
         hex = hex.TrimStart('#'); byte a = 255;
@@ -34,13 +36,14 @@ public static class Ui
     public static TextBlock Text(string value, double size = 13, string color = Ink, bool bold = false) => new()
     {
         Text = value, FontFamily = bold ? PlannerFontBold : PlannerFont, FontSize = size, Foreground = Brush(color), FontWeight = bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
+        CharacterSpacing = size < GoalTitleSize ? SmallTextSpacing : 0,
         VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap
     };
     public static HandButton Button(object content, ICommand? command = null, object? parameter = null, string? tooltip = null)
     {
         var b = new HandButton { Content = content, Command = command, CommandParameter = parameter, Background = Brush("#00FFFFFF"), BorderThickness = new(0),
             Padding = new(5), CornerRadius = new(5), MinHeight = 0, MinWidth = 0 };
-        if (tooltip is not null) { ToolTipService.SetToolTip(b, tooltip); Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tooltip); }
+        if (tooltip is not null) Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tooltip);
         return b;
     }
     public static Border Card(UIElement child, double radius = 17) => new() { Background = Brush("#FFFFFF"), CornerRadius = new(radius), Child = child, Padding = new(13) };

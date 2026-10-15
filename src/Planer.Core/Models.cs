@@ -115,7 +115,7 @@ public static class Palette
     };
     public static readonly string[] MoodColors = ["#66E37E", "#F7EF51", "#FF6961", "#56AAF9", "#C780E8"];
     public static readonly string[] TaskBackgrounds = ["#FFDFDD", "#FDFBD6", "#E0F8E5", "#DBEEFD"];
-    public static readonly string[] TaskForegrounds = ["#BD3026", "#A66A00", "#238A3C", "#2774AD"];
+    public static readonly string[] TaskForegrounds = ["#CC0A00", "#FFAA00", "#0DBA30", "#0B7ADA"];
 }
 
 public static class Dates

@@ -12,7 +12,7 @@ public sealed partial class PlannerView
         var layout = new Grid { RowSpacing = 10 }; layout.RowDefinitions.Add(new() { Height = GridLength.Auto }); layout.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         var filter = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
         filter.Children.Add(Ui.Text("Показывать", 12, Ui.Muted));
-        var mode = new ComboBox { ItemsSource = new[] { "Общий", "Настроение", "Привычки" }, SelectedIndex = _vm.YearMode, MinWidth = 170, FontSize = 12 };
+        var mode = new ComboBox { ItemsSource = new[] { "Общий", "Настроение", "Привычки" }, SelectedIndex = _vm.YearMode, MinWidth = 170, FontSize = 12, Foreground = Ui.Brush(Ui.Muted) };
         mode.SelectionChanged += (_, _) => { _vm.YearMode = mode.SelectedIndex; _vm.Refresh(); }; filter.Children.Add(mode);
         Ui.Add(layout, filter);
         var months = Ui.Grid(4, 3, 10);
@@ -33,13 +33,15 @@ public sealed partial class PlannerView
         {
             var date = start.AddDays(i); if (date.Month != first.Month) continue;
             var indicators = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var dateRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
+            dateRow.Children.Add(Ui.Text(date.Day.ToString(), 9, Ui.Muted));
             if (_vm.YearMode != 2)
             {
-                var mood = _vm.MoodOn(date); indicators.Children.Add(Ui.Dot(mood is { } m ? Palette.MoodColors[(int)m] : "#E8E3E0", mood is not null, 12));
+                var mood = _vm.MoodOn(date); dateRow.Children.Add(Ui.Dot(mood is { } m ? Palette.MoodColors[(int)m] : "#E8E3E0", mood is not null, 12));
             }
+            indicators.Children.Add(dateRow);
             if (_vm.YearMode != 1) indicators.Children.Add(ReadOnlyHabits(date, 5));
             var cell = new Border { Child = indicators, CornerRadius = new(3), BorderBrush = Ui.Brush("#FAF03D"), BorderThickness = new(date == _vm.Today ? 1 : 0), Background = Ui.Brush("#00FFFFFF"), Padding = new(1) };
-            ToolTipService.SetToolTip(cell, date.ToString("dddd, d MMMM yyyy", PlannerViewModel.Russian));
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(cell, date.ToString("d MMMM yyyy", PlannerViewModel.Russian));
             Ui.Add(days, cell, i % 7, i / 7);
         }

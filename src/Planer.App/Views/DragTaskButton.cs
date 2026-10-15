@@ -71,17 +71,23 @@ public sealed class DragTaskButton : HandButton
     internal async Task<SoftwareBitmap> RenderDragBitmapAsync()
     {
         var renderer = new RenderTargetBitmap();
-        await renderer.RenderAsync(this);
-        return SoftwareBitmap.CreateCopyFromBuffer(await renderer.GetPixelsAsync(), BitmapPixelFormat.Bgra8,
+        var bounds = TransformToVisual(XamlRoot.Content).TransformBounds(new Rect(0, 0, ActualWidth, ActualHeight));
+        double pixelsPerDip = XamlRoot.RasterizationScale;
+        await renderer.RenderAsync(this, Math.Max(1, (int)Math.Ceiling(bounds.Width * pixelsPerDip)), Math.Max(1, (int)Math.Ceiling(bounds.Height * pixelsPerDip)));
+        var bitmap = SoftwareBitmap.CreateCopyFromBuffer(await renderer.GetPixelsAsync(), BitmapPixelFormat.Bgra8,
             renderer.PixelWidth, renderer.PixelHeight, BitmapAlphaMode.Premultiplied);
+        bitmap.DpiX = bitmap.DpiY = 96 * pixelsPerDip;
+        return bitmap;
     }
 
     private async void CreateDragVisual(UIElement sender, DragStartingEventArgs args)
     {
         var deferral = args.GetDeferral();
-        var anchor = args.GetPosition(this);
         try
         {
+            var anchor = args.GetPosition(this);
+            var bounds = TransformToVisual(XamlRoot.Content).TransformBounds(new Rect(0, 0, ActualWidth, ActualHeight));
+            anchor = new Point(anchor.X * bounds.Width / ActualWidth, anchor.Y * bounds.Height / ActualHeight);
             _dragBitmap = await RenderDragBitmapAsync();
             args.DragUI.SetContentFromSoftwareBitmap(_dragBitmap, anchor);
             // Keep the original slot visible until a drop is committed or cancelled.
