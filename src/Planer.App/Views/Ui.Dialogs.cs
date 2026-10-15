@@ -31,6 +31,7 @@ public sealed class PrioritySwitch : ToggleButton
 public static partial class Ui
 {
     private static readonly HashSet<ContentDialog> OpenDialogs = [];
+    internal static ContentDialog? OpenDialogForRoot(XamlRoot root) => OpenDialogs.FirstOrDefault(d => ReferenceEquals(d.XamlRoot, root));
     internal static void CloseDialogsForLayoutRecovery()
     {
         foreach (var dialog in OpenDialogs.ToArray()) dialog.Hide();

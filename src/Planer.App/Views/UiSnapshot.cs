@@ -147,14 +147,19 @@ internal static class UiSnapshot
             default: throw new ArgumentException("Неизвестный сценарий снимка: " + scenario);
         }
         FrameworkElement? popupRoot = null;
-        for (int i = 0; i < 30 && popupRoot is null; i++)
+        ContentDialog? openedDialog = null;
+        for (int i = 0; i < 100 && popupRoot is null; i++)
         {
             await Task.Delay(30);
-            popupRoot = VisualTreeHelper.GetOpenPopupsForXamlRoot(view.XamlRoot).Select(p => p.Child).OfType<FrameworkElement>().FirstOrDefault();
+            openedDialog = Ui.OpenDialogForRoot(view.XamlRoot);
+            if (openedDialog?.Content is not DependencyObject expectedContent) continue;
+            popupRoot = VisualTreeHelper.GetOpenPopupsForXamlRoot(view.XamlRoot).Select(p => p.Child).OfType<FrameworkElement>()
+                .FirstOrDefault(root => Descendants<DependencyObject>(root).Any(child => ReferenceEquals(child, expectedContent)));
         }
-        if (popupRoot is null) throw new InvalidOperationException("Модальное окно не открылось");
+        if (popupRoot is null || openedDialog is null) throw new InvalidOperationException($"Не загрузилось содержимое формы {scenario}");
+        await PrepareAsync(popupRoot);
         if (scenario == "TaskDialogOn") foreach (var toggle in Descendants<PrioritySwitch>(popupRoot)) toggle.IsChecked = true;
-        if (scenario == "TaskMultilineDialog" && NormalizeLines(Descendants<TextBox>(popupRoot).First().Text) != "Первая строка\nВторая строка")
+        if (scenario == "TaskMultilineDialog" && NormalizeLines(Descendants<TextBox>((DependencyObject)openedDialog.Content).First().Text) != "Первая строка\nВторая строка")
             throw new InvalidOperationException("Редактор задачи потерял строки описания");
         var chrome = Descendants<Border>(popupRoot).FirstOrDefault(b => b.Name == "BackgroundElement");
         await SaveAsync(chrome ?? popupRoot, path);
