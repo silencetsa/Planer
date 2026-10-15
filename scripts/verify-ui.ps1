@@ -11,6 +11,7 @@ $planerCases = @(
     @{ Name='week'; View='Week' }, @{ Name='month'; View='Month' },
     @{ Name='year'; View='Year' }, @{ Name='habits'; View='Habits' },
     @{ Name='payments'; View='Payments' }, @{ Name='today'; View='Today' },
+    @{ Name='tray-lifecycle'; View='Week'; Scenario='TrayLifecycle' },
     @{ Name='week-large'; View='Week'; Large=$true },
     @{ Name='year-large'; View='Year'; Large=$true },
     @{ Name='year-mood'; View='Year'; Scenario='YearMood' },

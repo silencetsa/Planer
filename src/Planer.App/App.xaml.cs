@@ -20,6 +20,9 @@ public partial class App : Application
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _clockTimer;
     private Mutex? _instanceMutex;
     private TodayWindow? _dayWindow;
+    private TrayIcon? _tray;
+    internal static TrayIcon? Tray => (Current as App)?._tray;
+    internal static TodayWindow? FloatingWindow => (Current as App)?._dayWindow;
     public App() { InitializeComponent(); }
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -61,7 +64,7 @@ public partial class App : Application
             Window.Activated += (_, e) => { if (e.WindowActivationState != WindowActivationState.Deactivated) FloatingOwnsDialogs = false; };
             _clockTimer = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().CreateTimer();
             _clockTimer.Interval = TimeSpan.FromSeconds(30); _clockTimer.Tick += (_, _) => ViewModel.Run(ViewModel.Tick); _clockTimer.Start();
-            Window.Closed += (_, _) => { _clockTimer.Stop(); _dayWindow?.Close(); ViewModel.Dispose(); _instanceMutex.Dispose(); };
+            Window.Closed += (_, _) => { _clockTimer.Stop(); _tray?.Dispose(); _dayWindow?.Close(); ViewModel.Dispose(); _instanceMutex.Dispose(); };
             UnhandledException += (_, e) => { try { File.AppendAllText(Path.Combine(dataDir, "crash.log"), $"{DateTime.Now:O} {e.Exception}\n"); } catch { } };
         }
         catch (Exception ex)
@@ -82,6 +85,16 @@ public partial class App : Application
             } };
         }
         Window.Activate();
+        // Ordinary sessions have one icon; bulk rendering does not populate the user's tray.
+        if (Window is MainWindow && _clockTimer is not null && (CapturePath is null || CaptureScenario == "TrayLifecycle"))
+        {
+            void ReportTrayError(Exception error)
+            {
+                try { File.AppendAllText(Path.Combine(dataDir, "crash.log"), $"{DateTime.Now:O} Область уведомлений: {error}\n"); } catch { }
+            }
+            try { _tray = new TrayIcon(Window, ViewModel, ReportTrayError); }
+            catch (Exception error) { ReportTrayError(error); }
+        }
         if (CapturePath is not null)
         {
             if (commandLine.Contains("--capture-large")) Window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1920, 1080));

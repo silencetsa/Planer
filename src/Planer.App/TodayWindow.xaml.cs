@@ -21,9 +21,9 @@ public sealed partial class TodayWindow : Window
         AppWindow.Resize(new Windows.Graphics.SizeInt32(340, Math.Min(610, area.Height - 50)));
         AppWindow.Move(new Windows.Graphics.PointInt32(area.X + area.Width - 364, area.Y + 24));
         DaySurface.Children.Add(new PlannerView(vm, floating: true)); RefreshTitle();
+        if (App.CapturePath is not null) AppWindow.Move(new Windows.Graphics.PointInt32(-3400, -3000));
         if (App.CaptureToday && App.CapturePath is { } path)
         {
-            AppWindow.Move(new Windows.Graphics.PointInt32(-3400, -3000));
             DaySurface.Loaded += async (_, _) =>
             {
                 try

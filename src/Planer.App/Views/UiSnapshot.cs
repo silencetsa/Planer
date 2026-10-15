@@ -16,6 +16,21 @@ internal static class UiSnapshot
     public static async Task SaveScenarioAsync(FrameworkElement view, string path, string scenario, PlannerViewModel vm)
     {
         await PrepareAsync(view);
+        if (scenario == "TrayLifecycle")
+        {
+            var tray = App.Tray ?? throw new InvalidOperationException("Иконка области уведомлений не создана");
+            if (!tray.IsRegistered) throw new InvalidOperationException("Shell не вернула координаты иконки");
+            tray.Invoke(TrayAction.OpenPlanner);
+            if (!App.Window.AppWindow.IsVisible) throw new InvalidOperationException("Меню не открыло главный планер");
+            tray.Invoke(TrayAction.OpenToday); await Task.Delay(100); var first = App.FloatingWindow;
+            tray.Invoke(TrayAction.OpenToday); await Task.Delay(100);
+            if (first is null || !ReferenceEquals(first, App.FloatingWindow)
+                || first.AppWindow.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter { IsAlwaysOnTop: true })
+                throw new InvalidOperationException("Меню не сохранило единственное окно текущего дня поверх окон");
+            first.Close(); tray.Dispose(); await Task.Delay(100);
+            if (tray.IsRegistered) throw new InvalidOperationException("Иконка осталась в Shell после удаления");
+            await SaveAsync(view, path); return;
+        }
         if (scenario.StartsWith("Calendar", StringComparison.Ordinal))
         {
             var period = Descendants<Button>(view).First(b => b.Name == "PeriodButton"); var calendar = (Flyout)period.ContextFlyout;
