@@ -1,5 +1,5 @@
 #define AppName "Планер"
-#define AppVersion "1.1.0"
+#define AppVersion "1.1.1"
 #define AppExe "Planer.App.exe"
 
 [Setup]
