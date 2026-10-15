@@ -43,6 +43,7 @@ public partial class App : Application
         if (CapturePath is not null && scenarioIndex >= 0 && scenarioIndex + 1 < commandLine.Length) CaptureScenario = commandLine[scenarioIndex + 1];
         try
         {
+            ShellIdentity.Initialize();
             var store = new SqlitePlannerStore(DatabasePath);
             if (!existed && commandLine.Contains("--demo") && dataIndex >= 0) store.Save(DemoData.Create(DateOnly.FromDateTime(DateTime.Now)));
             ViewModel = new PlannerViewModel(new PlannerEngine(store, new SystemPlannerClock()));

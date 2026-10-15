@@ -6,7 +6,7 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         ExtendsContentIntoTitleBar = true; SetTitleBar(AppTitleBar);
-        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
+        AppWindow.SetIcon(ShellIdentity.IconPath);
         var area = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest).WorkArea;
         int width = Math.Min(1400, area.Width - 24), height = Math.Min(850, area.Height - 24);
         AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));

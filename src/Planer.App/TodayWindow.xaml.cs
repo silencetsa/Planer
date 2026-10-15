@@ -12,7 +12,7 @@ public sealed partial class TodayWindow : Window
     public TodayWindow(PlannerViewModel vm)
     {
         _vm = vm; InitializeComponent(); ExtendsContentIntoTitleBar = true; SetTitleBar(DayTitleBar);
-        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
+        AppWindow.SetIcon(ShellIdentity.IconPath);
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.IsAlwaysOnTop = true; presenter.IsMaximizable = false; presenter.IsMinimizable = false;

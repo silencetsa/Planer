@@ -59,6 +59,7 @@ internal static class UiSnapshot
         }
         if (scenario == "TrayLifecycle")
         {
+            ShellIdentity.VerifyWindowIcon(App.Window);
             var tray = App.Tray ?? throw new InvalidOperationException("Иконка области уведомлений не создана");
             if (!tray.IsRegistered) throw new InvalidOperationException("Shell не вернула координаты иконки");
             tray.Invoke(TrayAction.OpenPlanner);
@@ -68,6 +69,7 @@ internal static class UiSnapshot
             if (first is null || !ReferenceEquals(first, App.FloatingWindow)
                 || first.AppWindow.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter { IsAlwaysOnTop: true })
                 throw new InvalidOperationException("Меню не сохранило единственное окно текущего дня поверх окон");
+            ShellIdentity.VerifyWindowIcon(first);
             first.Close(); tray.Dispose(); await Task.Delay(100);
             if (tray.IsRegistered) throw new InvalidOperationException("Иконка осталась в Shell после удаления");
             await SaveAsync(view, path); return;
