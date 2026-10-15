@@ -8,13 +8,16 @@ namespace Planer_App.Views;
 
 public sealed partial class PlannerView
 {
-    private sealed record DropSlot(FrameworkElement Target, DateOnly? Date, DayPart? Part, Func<FrameworkElement> Anchor);
+    private sealed record DropSlot(FrameworkElement Target, DateOnly? Date, DayPart? Part, Func<FrameworkElement> Anchor, FrameworkElement WidthTarget);
     private readonly List<DropSlot> _dropSlots = [];
     private readonly DragSnapTracker _snap = new();
 
-    private void EnableDrop(FrameworkElement target, DateOnly? date, DayPart? part = null, Func<FrameworkElement>? anchor = null)
+    private void EnableDrop(FrameworkElement target, DateOnly? date, DayPart? part = null, Func<FrameworkElement>? anchor = null, FrameworkElement? widthTarget = null)
     {
-        target.AllowDrop = true; _dropSlots.Add(new(target, date, part, anchor ?? (() => target)));
+        target.AllowDrop = true; _dropSlots.Add(new(target, date, part, anchor ?? (() => target), widthTarget ?? target));
+        target.DragEnter += PlannerDragOver;
+        target.DragOver += PlannerDragOver;
+        target.Drop += PlannerDrop;
     }
 
     private Rect SlotBounds(DropSlot slot) => slot.Target.TransformToVisual(XamlRoot.Content)
@@ -30,9 +33,12 @@ public sealed partial class PlannerView
     private (DropSlot? Slot, Point? Anchor) ResolveDrop(Point cursor, DragTaskButton source)
     {
         var candidates = _dropSlots.Select((slot, i) => (Slot: slot, Key: i, Anchor: SlotOrigin(slot, source))).ToList();
-        double radius = 10 / XamlRoot.RasterizationScale;
+        double pixel = 1 / XamlRoot.RasterizationScale;
         var held = _snap.Update(new(cursor.X - source.GrabOffset.X, cursor.Y - source.GrabOffset.Y),
-            candidates.Select(c => new SnapTarget(c.Key, new(c.Anchor.X, c.Anchor.Y))).ToArray(), radius);
+            candidates.Select(c => new SnapTarget(c.Key, new(c.Anchor.X, c.Anchor.Y),
+                c.Slot.WidthTarget.TransformToVisual(XamlRoot.Content)
+                    .TransformBounds(new Rect(0, 0, c.Slot.WidthTarget.ActualWidth, c.Slot.WidthTarget.ActualHeight)).Width / 2)).ToArray(),
+            20 * pixel, 60 * pixel);
         if (held is { } key) { var snapped = candidates[key]; return (snapped.Slot, snapped.Anchor); }
         return (_dropSlots.FirstOrDefault(slot => SlotBounds(slot).Contains(cursor)), null);
     }
@@ -56,6 +62,8 @@ public sealed partial class PlannerView
         if (DragTaskButton.Active is not { } source || !args.DataView.Contains(StandardDataFormats.Text)) return;
         var slot = ResolveDrop(args.GetPosition(XamlRoot.Content), source).Slot;
         if (slot is null) return;
+        // Stop bubbling before awaiting, so the leaf and root cannot submit the same move twice.
+        args.Handled = true;
         var deferral = args.GetDeferral();
         try
         {

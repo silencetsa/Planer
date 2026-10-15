@@ -366,23 +366,65 @@ Test("A drag keeps its original grab offset when the window scales", () =>
     Equal(new SnapPoint(70, 7), DragSnapTracker.GrabOffset(new(70, 7), 200, 26, 200, 26));
     Equal(new SnapPoint(105, 10.5), DragSnapTracker.GrabOffset(new(70, 7), 200, 26, 300, 39));
 });
-Test("Snap engages within 10 pixels, holds at 10 and releases beyond 10", () =>
+Test("Snap capture uses half the day width and 20 vertical pixels independently", () =>
 {
-    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(100, 100))];
-    Equal<int?>(1, snap.Update(new(91, 100), slots, 10)); Equal<int?>(1, snap.Update(new(110, 100), slots, 10));
-    Equal<int?>(null, snap.Update(new(110.01, 100), slots, 10)); Equal<int?>(null, snap.Update(new(108, 108), slots, 10));
+    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(200, 100), 100)];
+    Equal<int?>(null, snap.Update(new(99.99, 100), slots, 20, 60));
+    Equal<int?>(null, snap.Update(new(200, 120.01), slots, 20, 60));
+    Equal<int?>(1, snap.Update(new(100, 120), slots, 20, 60));
+    snap.Reset(); Equal<int?>(1, snap.Update(new(300, 80), slots, 20, 60));
 });
-Test("Snap does not jump to another nearby slot until the held slot is left", () =>
+Test("Horizontal release is measured from engagement rather than the slot", () =>
 {
-    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(100, 100)), new(2, new(115, 100))];
-    Equal<int?>(1, snap.Update(new(100, 100), slots, 10)); Equal<int?>(1, snap.Update(new(109, 100), slots, 10));
-    Equal<int?>(2, snap.Update(new(111, 100), slots, 10)); snap.Reset(); Equal<int?>(1, snap.Update(new(107, 100), slots, 10));
+    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(100, 100), 120)];
+    Equal<int?>(1, snap.Update(new(140, 100), slots, 20, 60));
+    Equal<int?>(1, snap.Update(new(80, 100), slots, 20, 60));
+    Equal<int?>(null, snap.Update(new(79.99, 100), slots, 20, 60));
 });
-Test("Removed targets and scaled pixel radius cannot leave a stale snap", () =>
+Test("Snap releases beyond 60 pixels in either horizontal direction", () =>
 {
-    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(100, 100))];
-    Equal<int?>(1, snap.Update(new(105, 100), slots, 5)); Equal<int?>(null, snap.Update(new(106, 100), slots, 5));
-    Equal<int?>(1, snap.Update(new(100, 100), slots, 5)); Equal<int?>(null, snap.Update(new(100, 100), [], 5));
+    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(200, 100), 120)];
+    foreach (int direction in new[] { -1, 1 })
+    {
+        snap.Reset(); Equal<int?>(1, snap.Update(new(200, 100), slots, 20, 60));
+        Equal<int?>(1, snap.Update(new(200 + direction * 60, 120), slots, 20, 60));
+        Equal<int?>(null, snap.Update(new(200 + direction * 60.01, 120), slots, 20, 60));
+    }
+});
+Test("Released slots stay free until leaving their broad capture zone", () =>
+{
+    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(200, 100), 120)];
+    Equal<int?>(1, snap.Update(new(200, 100), slots, 20, 60));
+    Equal<int?>(null, snap.Update(new(261, 100), slots, 20, 60));
+    Equal<int?>(null, snap.Update(new(270, 100), slots, 20, 60));
+    Equal<int?>(null, snap.Update(new(321, 100), slots, 20, 60));
+    Equal<int?>(1, snap.Update(new(300, 100), slots, 20, 60));
+});
+Test("Snap keeps the selected slot until release even near a neighboring target", () =>
+{
+    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(100, 100), 100), new(2, new(180, 100), 100)];
+    Equal<int?>(1, snap.Update(new(100, 100), slots, 20, 60));
+    Equal<int?>(1, snap.Update(new(150, 100), slots, 20, 60));
+    Equal<int?>(2, snap.Update(new(161, 100), slots, 20, 60));
+});
+Test("Removed targets and a new drag cannot retain stale snap state", () =>
+{
+    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(100, 100), 100)];
+    Equal<int?>(1, snap.Update(new(100, 100), slots, 20, 60));
+    Equal<int?>(null, snap.Update(new(100, 100), [], 20, 60));
+    Equal<int?>(1, snap.Update(new(100, 100), slots, 20, 60));
+    Equal<int?>(null, snap.Update(new(161, 100), slots, 20, 60));
+    snap.Reset(); Equal<int?>(1, snap.Update(new(161, 100), slots, 20, 60));
+});
+Test("Pixel thresholds scale with DPI while day widths remain per target", () =>
+{
+    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(100, 100), 40), new(2, new(300, 100), 120)];
+    Equal<int?>(null, snap.Update(new(141, 100), slots, 10, 30));
+    Equal<int?>(1, snap.Update(new(100, 110), slots, 10, 30));
+    Equal<int?>(1, snap.Update(new(130, 110), slots, 10, 30));
+    Equal<int?>(null, snap.Update(new(130.01, 110), slots, 10, 30));
+    snap.Reset(); Equal<int?>(2, snap.Update(new(400, 100), slots, 10, 30));
+    Equal<int?>(null, snap.Update(new(400, 110.01), slots, 10, 30));
 });
 
 Console.WriteLine($"{passed} passed, {failed} failed");

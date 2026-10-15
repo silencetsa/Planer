@@ -17,6 +17,7 @@ public sealed class DragTaskButton : HandButton
     private bool _dragging;
     private DateTime _ignoreClicksUntil;
     private SoftwareBitmap? _dragBitmap;
+    private Task<SoftwareBitmap>? _preparedPreview;
     private double _sourceOpacity;
     internal static DragTaskButton? Active { get; private set; }
     internal static event EventHandler? ActiveDragEnded;
@@ -38,6 +39,27 @@ public sealed class DragTaskButton : HandButton
         AddHandler(PointerCanceledEvent, new PointerEventHandler(ClearPress), true);
         AddHandler(PointerCaptureLostEvent, new PointerEventHandler(ClearPress), true);
         DragStarting += CreateDragVisual;
+        PointerEntered += (_, _) => PreparePreview();
+        PointerExited += (_, _) => { if (!_dragging) DiscardPreview(); };
+        SizeChanged += (_, _) => { if (!_dragging) DiscardPreview(); };
+        Unloaded += (_, _) => { if (!_dragging) DiscardPreview(); };
+    }
+
+    private void PreparePreview()
+    {
+        if (_dragging || _preparedPreview is not null || XamlRoot is null || ActualWidth <= 0) return;
+        _preparedPreview = PreparePreviewAsync();
+    }
+    private async Task<SoftwareBitmap> PreparePreviewAsync()
+    {
+        // Let hover expansion finish before rendering, keeping DragStarting's deferral short.
+        await Task.Yield(); UpdateLayout(); return await RenderDragBitmapAsync();
+    }
+    private async void DiscardPreview()
+    {
+        var pending = _preparedPreview; _preparedPreview = null;
+        if (pending is null) return;
+        try { (await pending).Dispose(); } catch { /* An unloaded view may cancel rendering. */ }
     }
 
     private void Pressed(object sender, PointerRoutedEventArgs args)
@@ -46,6 +68,7 @@ public sealed class DragTaskButton : HandButton
         if (_dragging || !point.Properties.IsLeftButtonPressed) return;
         _pressedPointer = point.PointerId; _pressPosition = point.Position;
         _localGrabPosition = args.GetCurrentPoint(this).Position;
+        PreparePreview();
         DragDiagnostics.Write("press", new { Id = SourceTask?.Id, LocalX = _localGrabPosition.X, LocalY = _localGrabPosition.Y });
     }
 
@@ -63,7 +86,8 @@ public sealed class DragTaskButton : HandButton
         {
             // Release Button's capture before handing the gesture to WinUI drag/drop.
             ReleasePointerCapture(args.Pointer);
-            await StartDragAsync(point);
+            var operation = await StartDragAsync(point);
+            DragDiagnostics.Write("finished", new { Operation = operation.ToString() });
         }
         catch (Exception ex) { DragFailed?.Invoke(this, ex); }
         finally
@@ -100,7 +124,8 @@ public sealed class DragTaskButton : HandButton
             var bounds = TransformToVisual(XamlRoot.Content).TransformBounds(new Rect(0, 0, ActualWidth, ActualHeight));
             var grip = DragSnapTracker.GrabOffset(new(_localGrabPosition.X, _localGrabPosition.Y), ActualWidth, ActualHeight, bounds.Width, bounds.Height);
             GrabOffset = new(grip.X, grip.Y); PreviewSize = new(bounds.Width, bounds.Height);
-            _dragBitmap = await RenderDragBitmapAsync();
+            var prepared = _preparedPreview; _preparedPreview = null;
+            _dragBitmap = prepared is not null ? await prepared : await RenderDragBitmapAsync();
             // Preserve the point pressed before crossing the drag threshold, including view scaling.
             args.DragUI.SetContentFromSoftwareBitmap(_dragBitmap, GrabOffset);
             DragDiagnostics.Write("preview", new { GrabOffset.X, GrabOffset.Y, PreviewSize.Width, PreviewSize.Height });

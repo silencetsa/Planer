@@ -23,9 +23,10 @@ public sealed partial class PlannerView : UserControl
         _vm = vm; _floating = floating; RequestedTheme = ElementTheme.Light; DataContext = vm; FontFamily = Ui.PlannerFont;
         Background = Ui.Brush(Ui.Paper); _scaleHost = new(_root, floating); Content = _scaleHost;
         _root.AllowDrop = true;
-        _root.AddHandler(DragOverEvent, new DragEventHandler(PlannerDragOver), true);
-        _root.AddHandler(DropEvent, new DragEventHandler(PlannerDrop), true);
-        _root.AddHandler(DragLeaveEvent, new DragEventHandler(PlannerDragLeave), true);
+        _root.DragEnter += PlannerDragOver;
+        _root.DragOver += PlannerDragOver;
+        _root.Drop += PlannerDrop;
+        _root.DragLeave += PlannerDragLeave;
         Loaded += (_, _) => { Subscribe(); Render(); }; Unloaded += (_, _) => Unsubscribe();
     }
     private void Subscribe()
@@ -107,11 +108,12 @@ public sealed partial class PlannerView : UserControl
             button.Padding = new(0); button.Height = 29; button.HorizontalAlignment = HorizontalAlignment.Stretch; Ui.Add(moods, button, (int)mood);
         }
         Ui.Add(top, moods, 1); Ui.Add(inner, top);
+        var card = Ui.Card(inner);
         var sections = new DaySectionsPanel(Enum.GetValues<DayPart>().Select(part =>
             _vm.TasksOn(date, part).Count > 0 || (part == DayPart.Morning && _vm.PaymentsOn(date).Count > 0)).ToArray());
-        foreach (var part in Enum.GetValues<DayPart>()) sections.Children.Add(DaySection(date, part, sections));
+        foreach (var part in Enum.GetValues<DayPart>()) sections.Children.Add(DaySection(date, part, sections, card));
         Ui.Add(inner, sections, row: 1); Ui.Add(inner, HabitDots(date), row: 2);
-        var card = Ui.Card(inner); card.BorderThickness = new(date == _vm.Today ? 4 : 0); card.BorderBrush = Ui.Brush("#FAF03D");
+        card.BorderThickness = new(date == _vm.Today ? 4 : 0); card.BorderBrush = Ui.Brush("#FAF03D");
         if (date == _vm.Today) card.CornerRadius = new(17, 0, 17, 17);
         if (date != _vm.Today || floating) return card;
         var outer = new Grid(); outer.Children.Add(card);
@@ -119,7 +121,7 @@ public sealed partial class PlannerView : UserControl
         pin.Background = Ui.Brush("#FAF03D"); pin.Width = 26; pin.Height = 24; pin.Padding = new(2, 0, 0, 2); pin.HorizontalAlignment = HorizontalAlignment.Right;
         pin.VerticalAlignment = VerticalAlignment.Top; pin.CornerRadius = new(0, 0, 0, 9); outer.Children.Add(pin); return outer;
     }
-    private UIElement DaySection(DateOnly date, DayPart part, DaySectionsPanel owner)
+    private UIElement DaySection(DateOnly date, DayPart part, DaySectionsPanel owner, FrameworkElement dayCard)
     {
         var layout = new Grid { ColumnSpacing = 6 };
         layout.ColumnDefinitions.Add(new() { Width = new(17) }); layout.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
@@ -141,7 +143,7 @@ public sealed partial class PlannerView : UserControl
         border.PointerExited += (_, _) => { pointerInside = false; if (plus.FocusState == FocusState.Unfocused) plus.Visibility = Visibility.Collapsed; };
         border.GotFocus += (_, _) => plus.Visibility = Visibility.Visible;
         border.LostFocus += (_, _) => { if (!pointerInside) plus.Visibility = Visibility.Collapsed; };
-        EnableDrop(border, date, part, () => insertion); return border;
+        EnableDrop(border, date, part, () => insertion, dayCard); return border;
     }
     private static string PartName(DayPart part) => part switch { DayPart.Morning => "утро", DayPart.Afternoon => "день", _ => "вечер" };
     private UIElement TaskBlock(PlannerTask task, bool compact = false)
@@ -208,7 +210,7 @@ public sealed partial class PlannerView : UserControl
         var plus = Ui.Button(Ui.Icon("\uE710", 14), _vm.CreateTaskCommand, new TaskLocation(null), "Добавить нераспределённую задачу");
         plus.HorizontalAlignment = HorizontalAlignment.Stretch; plus.Padding = new(0); plus.Background = Ui.Brush("#F5F5F5"); plus.Opacity = 0; Ui.Add(layout, plus, row: 2);
         var card = Ui.Card(layout); card.PointerEntered += (_, _) => plus.Opacity = 1; card.PointerExited += (_, _) => plus.Opacity = 0;
-        card.GotFocus += (_, _) => plus.Opacity = 1; card.LostFocus += (_, _) => plus.Opacity = 0; EnableDrop(card, null, anchor: () => insertion); return card;
+        card.GotFocus += (_, _) => plus.Opacity = 1; card.LostFocus += (_, _) => plus.Opacity = 0; EnableDrop(card, null, anchor: () => insertion, widthTarget: insertion); return card;
     }
     private UIElement MatrixCard()
     {
