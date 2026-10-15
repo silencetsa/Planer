@@ -15,6 +15,7 @@ public partial class App : Application
     internal static string? CapturePath { get; private set; }
     internal static bool CaptureToday { get; private set; }
     internal static bool CaptureTaskPreview { get; private set; }
+    internal static string? CaptureScenario { get; private set; }
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _clockTimer;
     private Mutex? _instanceMutex;
     private TodayWindow? _dayWindow;
@@ -33,6 +34,8 @@ public partial class App : Application
         int captureIndex = Array.IndexOf(commandLine, "--capture");
         if (dataIndex >= 0 && captureIndex >= 0 && captureIndex + 1 < commandLine.Length) CapturePath = Path.GetFullPath(commandLine[captureIndex + 1]);
         CaptureTaskPreview = CapturePath is not null && commandLine.Contains("--capture-task-preview");
+        int scenarioIndex = Array.IndexOf(commandLine, "--scenario");
+        if (CapturePath is not null && scenarioIndex >= 0 && scenarioIndex + 1 < commandLine.Length) CaptureScenario = commandLine[scenarioIndex + 1];
         try
         {
             var store = new SqlitePlannerStore(DatabasePath);
@@ -77,7 +80,11 @@ public partial class App : Application
             } };
         }
         Window.Activate();
-        if (CapturePath is not null) Window.AppWindow.Move(new Windows.Graphics.PointInt32(-3000, -3000));
+        if (CapturePath is not null)
+        {
+            if (commandLine.Contains("--capture-large")) Window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1920, 1080));
+            Window.AppWindow.Move(new Windows.Graphics.PointInt32(-3000, -3000));
+        }
         if (CaptureToday) ViewModel.FloatCommand.Execute(null);
     }
 }

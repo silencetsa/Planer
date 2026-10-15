@@ -11,7 +11,8 @@ public sealed partial class MainPage : Page
         {
             try
             {
-                if (App.CaptureTaskPreview) await UiSnapshot.SaveTaskPreviewAsync(Surface, path);
+                if (App.CaptureScenario is { } scenario) await UiSnapshot.SaveScenarioAsync(Surface, path, scenario, App.ViewModel);
+                else if (App.CaptureTaskPreview) await UiSnapshot.SaveTaskPreviewAsync(Surface, path);
                 else await UiSnapshot.SaveAsync(Surface, path);
             }
             catch (Exception ex) { File.WriteAllText(path + ".error.txt", ex.ToString()); }

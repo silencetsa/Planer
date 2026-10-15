@@ -3,15 +3,42 @@ $ErrorActionPreference = 'Stop'
 $planerRoot = Split-Path -Parent $PSScriptRoot
 if (!$Executable) { $Executable = Join-Path $planerRoot 'src\Planer.App\bin\x64\Release\net10.0-windows10.0.26100.0\win-x64\Planer.App.exe' }
 $Executable = (Resolve-Path -LiteralPath $Executable).Path
-$planerDataDir = Join-Path $planerRoot 'artifacts\qa-data'
+$planerQaRunDir = Join-Path $planerRoot ('artifacts\qa-runs\' + [guid]::NewGuid().ToString('N'))
+$planerDataDir = Join-Path $planerQaRunDir 'demo'
 $planerImageDir = Join-Path $planerRoot 'artifacts\screenshots'
 New-Item -ItemType Directory -Path $planerImageDir -Force | Out-Null
-foreach ($planerScreen in @('Week','Month','Year','Habits','Payments','Today')) {
-    $planerImagePath = Join-Path $planerImageDir ($planerScreen.ToLowerInvariant() + '.png')
+$planerCases = @(
+    @{ Name='week'; View='Week' }, @{ Name='month'; View='Month' },
+    @{ Name='year'; View='Year' }, @{ Name='habits'; View='Habits' },
+    @{ Name='payments'; View='Payments' }, @{ Name='today'; View='Today' },
+    @{ Name='week-large'; View='Week'; Large=$true },
+    @{ Name='year-large'; View='Year'; Large=$true },
+    @{ Name='year-mood'; View='Year'; Scenario='YearMood' },
+    @{ Name='year-habits'; View='Year'; Scenario='YearHabits' },
+    @{ Name='week-notes'; View='Week'; Scenario='Notes' },
+    @{ Name='month-notes'; View='Month'; Scenario='Notes' },
+    @{ Name='day-plus'; View='Week'; Scenario='DayPlus' },
+    @{ Name='task-dialog'; View='Week'; Scenario='TaskDialog' },
+    @{ Name='task-dialog-on'; View='Week'; Scenario='TaskDialogOn' },
+    @{ Name='task-dialog-large'; View='Week'; Scenario='TaskDialog'; Large=$true },
+    @{ Name='habit-dialog'; View='Habits'; Scenario='HabitDialog'; Empty=$true },
+    @{ Name='payment-dialog'; View='Payments'; Scenario='PaymentDialog' },
+    @{ Name='finish-habit-dialog'; View='Habits'; Scenario='FinishHabitDialog' },
+    @{ Name='task-preview'; View='Week'; Preview=$true },
+    @{ Name='task-preview-large'; View='Week'; Preview=$true; Large=$true }
+)
+foreach ($planerCase in $planerCases) {
+    $planerScreen = $planerCase.Name
+    $planerImagePath = Join-Path $planerImageDir ($planerScreen + '.png')
     $planerErrorPath = $planerImagePath + '.error.txt'
     if (Test-Path -LiteralPath $planerErrorPath) { Remove-Item -LiteralPath $planerErrorPath }
     if (Test-Path -LiteralPath $planerImagePath) { Remove-Item -LiteralPath $planerImagePath }
-    $planerArgs = @('--data-dir', ('"' + $planerDataDir + '"'), '--demo', '--view', $planerScreen, '--capture', ('"' + $planerImagePath + '"'))
+    $planerCaseData = if ($planerCase.Empty) { Join-Path $planerQaRunDir 'empty' } else { $planerDataDir }
+    $planerArgs = @('--data-dir', ('"' + $planerCaseData + '"'), '--view', $planerCase.View, '--capture', ('"' + $planerImagePath + '"'))
+    if (!$planerCase.Empty) { $planerArgs += '--demo' }
+    if ($planerCase.Scenario) { $planerArgs += @('--scenario', $planerCase.Scenario) }
+    if ($planerCase.Large) { $planerArgs += '--capture-large' }
+    if ($planerCase.Preview) { $planerArgs += '--capture-task-preview' }
     $planerProcess = Start-Process -FilePath $Executable -ArgumentList $planerArgs -WorkingDirectory (Split-Path -Parent $Executable) -WindowStyle Hidden -PassThru
     if (!$planerProcess.WaitForExit(15000)) {
         Stop-Process -Id $planerProcess.Id -Force -ErrorAction SilentlyContinue
