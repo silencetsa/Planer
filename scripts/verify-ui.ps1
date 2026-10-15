@@ -12,6 +12,7 @@ $planerCases = @(
     @{ Name='year'; View='Year' }, @{ Name='habits'; View='Habits' },
     @{ Name='payments'; View='Payments' }, @{ Name='today'; View='Today' },
     @{ Name='tray-lifecycle'; View='Week'; Scenario='TrayLifecycle' },
+    @{ Name='recurring-month'; View='Month'; Scenario='RecurringMonth'; Separate=$true },
     @{ Name='week-large'; View='Week'; Large=$true },
     @{ Name='year-large'; View='Year'; Large=$true },
     @{ Name='year-mood'; View='Year'; Scenario='YearMood' },
@@ -31,6 +32,7 @@ $planerCases = @(
     @{ Name='task-dialog'; View='Week'; Scenario='TaskDialog' },
     @{ Name='task-dialog-on'; View='Week'; Scenario='TaskDialogOn' },
     @{ Name='task-dialog-large'; View='Week'; Scenario='TaskDialog'; Large=$true },
+    @{ Name='task-multiline-dialog'; View='Week'; Scenario='TaskMultilineDialog'; Separate=$true },
     @{ Name='delete-task-dialog'; View='Week'; Scenario='DeleteTaskDialog' },
     @{ Name='delete-recurring-dialog'; View='Week'; Scenario='DeleteRecurringDialog'; Separate=$true },
     @{ Name='move-recurring-dialog'; View='Week'; Scenario='MoveRecurringDialog'; Separate=$true },
@@ -40,7 +42,10 @@ $planerCases = @(
     @{ Name='task-preview'; View='Week'; Preview=$true },
     @{ Name='task-preview-large'; View='Week'; Preview=$true; Large=$true }
 )
-if ($Only.Count -gt 0) { $planerCases = @($planerCases | Where-Object { $_.Name -in $Only }) }
+if ($Only.Count -gt 0) {
+    $planerCases = @($planerCases | Where-Object { $_.Name -in $Only })
+    if ($planerCases.Count -ne @($Only | Select-Object -Unique).Count) { throw 'Указан неизвестный сценарий QA' }
+}
 foreach ($planerCase in $planerCases) {
     $planerScreen = $planerCase.Name
     $planerImagePath = Join-Path $planerImageDir ($planerScreen + '.png')

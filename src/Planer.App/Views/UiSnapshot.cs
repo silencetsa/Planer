@@ -16,6 +16,16 @@ internal static class UiSnapshot
     public static async Task SaveScenarioAsync(FrameworkElement view, string path, string scenario, PlannerViewModel vm)
     {
         await PrepareAsync(view);
+        if (scenario == "RecurringMonth")
+        {
+            var request = new TaskEditRequest(null, "Еженедельная проверка планов", true, false, new(null));
+            vm.SaveTask(request, request.Description, true, false, Repeat.Weekly);
+            var pending = vm.Backlog.First(t => t.Description == request.Description);
+            vm.MoveTaskCommand.Execute(new TaskMove(pending.Id, vm.Today, DayPart.Afternoon));
+            vm.Navigate(PlannerScreen.Month, vm.Today.AddMonths(1));
+            if (vm.Matrix.Scheduled.Sum() < 4 || vm.Backlog.Any(t => t.Id == pending.Id)) throw new InvalidOperationException("Будущие повторы не появились в месяце");
+            await SaveAsync(view, path); return;
+        }
         if (scenario == "TrayLifecycle")
         {
             var tray = App.Tray ?? throw new InvalidOperationException("Иконка области уведомлений не создана");
@@ -57,7 +67,16 @@ internal static class UiSnapshot
             if (vm.Screen != expected || (expected == PlannerScreen.Week && vm.SelectedDate.Day != 20)) throw new InvalidOperationException("Неверный переход календаря");
             await SaveAsync(view, path); return;
         }
-        if (scenario == "Notes") { vm.Notes = "Оставить время для прогулки и отдыха.\nВажные мысли этой недели."; vm.ToggleNotesCommand.Execute(null); await SaveAsync(view, path); return; }
+        if (scenario == "Notes")
+        {
+            vm.Notes = "Оставить время для прогулки и отдыха.\nВажные мысли этой недели."; vm.ToggleNotesCommand.Execute(null); await PrepareAsync(view);
+            var notes = Descendants<TextBox>(view).First(b => b.AcceptsReturn);
+            if (NormalizeLines(notes.Text) != NormalizeLines(vm.Notes)) throw new InvalidOperationException("Заметки потеряли строки при открытии");
+            notes.Text += "\rЕщё одна мысль.";
+            await PrepareAsync(view);
+            if (!NormalizeLines(vm.Notes).Contains("Важные мысли этой недели.\nЕщё одна мысль.")) throw new InvalidOperationException("Правка заметок потеряла предыдущие строки");
+            await SaveAsync(view, path); return;
+        }
         if (scenario is "PaymentNormal" or "PaymentHover" or "PaymentDone")
         {
             var paymentButton = Descendants<Button>(view).First(b => b.Tag is PaymentOccurrence);
@@ -89,6 +108,10 @@ internal static class UiSnapshot
         switch (scenario)
         {
             case "TaskDialog": case "TaskDialogOn": vm.CreateTaskCommand.Execute(new TaskLocation(vm.Today, DayPart.Evening)); break;
+            case "TaskMultilineDialog":
+                var multiline = new TaskEditRequest(null, "Первая строка\nВторая строка", true, false, new(vm.Today));
+                vm.SaveTask(multiline, multiline.Description, true, false, Repeat.None);
+                vm.EditTaskCommand.Execute(vm.TasksOn(vm.Today).First(t => t.Description == multiline.Description).Id); break;
             case "DeleteTaskDialog": vm.DeleteTaskCommand.Execute(vm.TasksOn(vm.Today).First().Id); break;
             case "DeleteRecurringDialog": case "MoveRecurringDialog":
                 var request = new TaskEditRequest(null, "Повторяющаяся задача", true, false, new(vm.Today, DayPart.Morning));
@@ -110,9 +133,12 @@ internal static class UiSnapshot
         }
         if (popupRoot is null) throw new InvalidOperationException("Модальное окно не открылось");
         if (scenario == "TaskDialogOn") foreach (var toggle in Descendants<PrioritySwitch>(popupRoot)) toggle.IsChecked = true;
+        if (scenario == "TaskMultilineDialog" && NormalizeLines(Descendants<TextBox>(popupRoot).First().Text) != "Первая строка\nВторая строка")
+            throw new InvalidOperationException("Редактор задачи потерял строки описания");
         var chrome = Descendants<Border>(popupRoot).FirstOrDefault(b => b.Name == "BackgroundElement");
         await SaveAsync(chrome ?? popupRoot, path);
     }
+    private static string NormalizeLines(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');
     private static IEnumerable<T> Descendants<T>(DependencyObject node) where T : DependencyObject
     {
         if (node is T match) yield return match;

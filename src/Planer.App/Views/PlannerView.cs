@@ -217,7 +217,7 @@ public sealed partial class PlannerView : UserControl
         title.HorizontalAlignment = HorizontalAlignment.Center; title.Padding = new(0); Ui.Add(layout, title);
         if (_vm.NotesVisible)
         {
-            var notes = new TextBox { Text = _vm.Notes, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, BorderThickness = new(0), Background = Ui.Brush("#FFFFFF"), PlaceholderText = _vm.Screen == PlannerScreen.Month ? "Заметки этого месяца…" : "Заметки этой недели…",
+            var notes = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Text = _vm.Notes, BorderThickness = new(0), Background = Ui.Brush("#FFFFFF"), PlaceholderText = _vm.Screen == PlannerScreen.Month ? "Заметки этого месяца…" : "Заметки этой недели…",
                 VerticalAlignment = VerticalAlignment.Stretch, FontSize = 12, FontStyle = Windows.UI.Text.FontStyle.Italic, Padding = new(0), Foreground = Ui.Brush(Ui.Ink) };
             notes.TextChanged += (_, _) => _vm.Notes = notes.Text; Ui.Add(layout, notes, row: 1);
         }
@@ -252,7 +252,7 @@ public sealed partial class PlannerView : UserControl
     private async void EditTask(object? sender, TaskEditRequest request)
     {
         if (!OwnsDialogs) return;
-        var description = new TextBox { Text = request.Description, Header = "Описание задачи", PlaceholderText = "Что нужно сделать?", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 96, MaxHeight = 250, MaxLength = 10000 };
+        var description = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Text = request.Description, Header = "Описание задачи", PlaceholderText = "Что нужно сделать?", MinHeight = 96, MaxHeight = 250, MaxLength = 10000 };
         var important = new PrioritySwitch(request.Important, "Важное");
         var urgent = new PrioritySwitch(request.Urgent, "Срочное");
         var repeat = new ComboBox { Header = "Повтор", ItemsSource = TaskRepeatNames, SelectedIndex = (int)request.Repeat, HorizontalAlignment = HorizontalAlignment.Stretch };
