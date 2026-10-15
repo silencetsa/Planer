@@ -17,6 +17,9 @@ artifacts/
 dist/
 # Original font download; the application faces are kept in Assets/Fonts.
 /Font/
+# Incoming icon replacements; the app copies are tracked under Assets.
+/planner.ico
+/planner-tray.ico
 *.msix
 *.msixbundle
 *.appx
