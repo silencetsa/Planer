@@ -48,10 +48,13 @@ public static partial class Ui
         return b;
     }
     public static Border Card(UIElement child, double radius = 17) => new() { Background = Brush("#FFFFFF"), CornerRadius = new(radius), Child = child, Padding = new(13) };
-    public static HandButton PeriodButton(string title, ICommand? command = null, string? name = null)
+    public static HandButton PeriodButton(string title, ICommand? command = null, string? name = null, string foreground = Accent, string background = "#F3E3FA")
     {
-        var button = Button(Text(title, GoalTitleSize, Accent, true), command, tooltip: name);
-        button.Background = Brush("#F3E3FA"); button.Padding = new(12, 7, 12, 7); return button;
+        var button = Button(Text(title, GoalTitleSize, foreground, true), command, tooltip: name);
+        button.Background = Brush(background); button.Padding = new(12, 7, 12, 7);
+        button.Resources["ButtonBackgroundPointerOver"] = button.Background;
+        button.Resources["ButtonBackgroundPressed"] = button.Background;
+        return button;
     }
     public static Grid Grid(int columns, int rows = 1, double gap = 10)
     {

@@ -113,8 +113,8 @@ public sealed partial class PlannerView : UserControl
             _vm.TasksOn(date, part).Count > 0 || (part == DayPart.Morning && _vm.PaymentsOn(date).Count > 0)).ToArray());
         foreach (var part in Enum.GetValues<DayPart>()) sections.Children.Add(DaySection(date, part, sections, card));
         Ui.Add(inner, sections, row: 1); Ui.Add(inner, HabitDots(date), row: 2);
-        card.BorderThickness = new(date == _vm.Today ? 4 : 0); card.BorderBrush = Ui.Brush("#FAF03D");
-        if (date == _vm.Today) card.CornerRadius = new(17, 0, 17, 17);
+        card.BorderThickness = new(date == _vm.Today && !floating ? 4 : 0); card.BorderBrush = Ui.Brush("#FAF03D");
+        if (date == _vm.Today && !floating) card.CornerRadius = new(17, 0, 17, 17);
         if (date != _vm.Today || floating) return card;
         var outer = new Grid(); outer.Children.Add(card);
         var pin = Ui.Button(Ui.OriginalIcon("WhiteAccent.png", 21), _vm.FloatCommand, tooltip: "Текущий день поверх всех окон");

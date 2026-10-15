@@ -14,7 +14,8 @@ public sealed partial class PlannerView
     private UIElement PaymentsBoard()
     {
         var outer = new Grid { RowSpacing = 12 }; outer.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) }); outer.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        var switchList = Ui.Button(Ui.Text(_vm.ShowCompletedPayments ? "← Активные платежи" : "Завершённые платежи", 13, Ui.Orange));
+        var switchList = Ui.PeriodButton(_vm.ShowCompletedPayments ? "← Активные платежи" : "Завершённые платежи", foreground: "#FF7C05", background: "#FFEEE3");
+        switchList.Name = "CompletedPaymentsButton";
         switchList.HorizontalAlignment = HorizontalAlignment.Left; switchList.Click += (_, _) => { _vm.ShowCompletedPayments = !_vm.ShowCompletedPayments; _vm.Refresh(); }; Ui.Add(outer, switchList, row: 1);
         var list = new StackPanel { Spacing = 14, HorizontalAlignment = HorizontalAlignment.Stretch };
         var payments = _vm.Payments.Where(p => _vm.ShowCompletedPayments != p.IsActive(_vm.Today)).Select(p => (Payment: p, Revision: _vm.PaymentRevision(p)!))
