@@ -16,6 +16,7 @@ public partial class App : Application
     internal static bool CaptureToday { get; private set; }
     internal static bool CaptureTaskPreview { get; private set; }
     internal static string? CaptureScenario { get; private set; }
+    internal static string? DragTracePath { get; private set; }
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _clockTimer;
     private Mutex? _instanceMutex;
     private TodayWindow? _dayWindow;
@@ -34,6 +35,7 @@ public partial class App : Application
         int captureIndex = Array.IndexOf(commandLine, "--capture");
         if (dataIndex >= 0 && captureIndex >= 0 && captureIndex + 1 < commandLine.Length) CapturePath = Path.GetFullPath(commandLine[captureIndex + 1]);
         CaptureTaskPreview = CapturePath is not null && commandLine.Contains("--capture-task-preview");
+        if (dataIndex >= 0 && commandLine.Contains("--trace-drag")) DragTracePath = Path.Combine(Path.GetFullPath(dataDir), "drag-trace.jsonl");
         int scenarioIndex = Array.IndexOf(commandLine, "--scenario");
         if (CapturePath is not null && scenarioIndex >= 0 && scenarioIndex + 1 < commandLine.Length) CaptureScenario = commandLine[scenarioIndex + 1];
         try

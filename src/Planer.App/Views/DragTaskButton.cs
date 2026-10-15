@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation;
 using Windows.Graphics.Imaging;
+using Planer.Core;
 
 namespace Planer_App.Views;
 
@@ -12,10 +13,17 @@ public sealed class DragTaskButton : HandButton
     private const double DragThreshold = 6;
     private uint? _pressedPointer;
     private Point _pressPosition;
+    private Point _localGrabPosition;
     private bool _dragging;
     private DateTime _ignoreClicksUntil;
     private SoftwareBitmap? _dragBitmap;
     private double _sourceOpacity;
+    internal static DragTaskButton? Active { get; private set; }
+    internal static event EventHandler? ActiveDragEnded;
+    internal SoftwareBitmap? DragBitmap => _dragBitmap;
+    internal Point GrabOffset { get; private set; }
+    internal Size PreviewSize { get; private set; }
+    internal PlannerTask? SourceTask { get; init; }
     public bool IsClickSuppressed => _dragging || DateTime.UtcNow <= _ignoreClicksUntil;
     public event EventHandler? DragGestureFinished;
     public event EventHandler<Exception>? DragFailed;
@@ -37,6 +45,8 @@ public sealed class DragTaskButton : HandButton
         var point = args.GetCurrentPoint(XamlRoot.Content as UIElement);
         if (_dragging || !point.Properties.IsLeftButtonPressed) return;
         _pressedPointer = point.PointerId; _pressPosition = point.Position;
+        _localGrabPosition = args.GetCurrentPoint(this).Position;
+        DragDiagnostics.Write("press", new { Id = SourceTask?.Id, LocalX = _localGrabPosition.X, LocalY = _localGrabPosition.Y });
     }
 
     private async void Moved(object sender, PointerRoutedEventArgs args)
@@ -48,6 +58,7 @@ public sealed class DragTaskButton : HandButton
         if (dx * dx + dy * dy < DragThreshold * DragThreshold) return;
         _pressedPointer = null; _dragging = true; args.Handled = true;
         _sourceOpacity = Opacity;
+        Active = this;
         try
         {
             // Release Button's capture before handing the gesture to WinUI drag/drop.
@@ -59,6 +70,7 @@ public sealed class DragTaskButton : HandButton
         {
             Opacity = _sourceOpacity; _dragBitmap?.Dispose(); _dragBitmap = null;
             _dragging = false; _ignoreClicksUntil = DateTime.UtcNow.AddMilliseconds(250);
+            Active = null; ActiveDragEnded?.Invoke(this, EventArgs.Empty);
             DragGestureFinished?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -85,11 +97,13 @@ public sealed class DragTaskButton : HandButton
         var deferral = args.GetDeferral();
         try
         {
-            var anchor = args.GetPosition(this);
             var bounds = TransformToVisual(XamlRoot.Content).TransformBounds(new Rect(0, 0, ActualWidth, ActualHeight));
-            anchor = new Point(anchor.X * bounds.Width / ActualWidth, anchor.Y * bounds.Height / ActualHeight);
+            var grip = DragSnapTracker.GrabOffset(new(_localGrabPosition.X, _localGrabPosition.Y), ActualWidth, ActualHeight, bounds.Width, bounds.Height);
+            GrabOffset = new(grip.X, grip.Y); PreviewSize = new(bounds.Width, bounds.Height);
             _dragBitmap = await RenderDragBitmapAsync();
-            args.DragUI.SetContentFromSoftwareBitmap(_dragBitmap, anchor);
+            // Preserve the point pressed before crossing the drag threshold, including view scaling.
+            args.DragUI.SetContentFromSoftwareBitmap(_dragBitmap, GrabOffset);
+            DragDiagnostics.Write("preview", new { GrabOffset.X, GrabOffset.Y, PreviewSize.Width, PreviewSize.Height });
             // Keep the original slot visible until a drop is committed or cancelled.
             Opacity = .35;
         }

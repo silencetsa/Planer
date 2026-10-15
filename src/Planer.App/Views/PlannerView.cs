@@ -23,7 +23,9 @@ public sealed partial class PlannerView : UserControl
         _vm = vm; _floating = floating; RequestedTheme = ElementTheme.Light; DataContext = vm; FontFamily = Ui.PlannerFont;
         Background = Ui.Brush(Ui.Paper); _scaleHost = new(_root, floating); Content = _scaleHost;
         _root.AllowDrop = true;
-        _root.AddHandler(DragOverEvent, new DragEventHandler((_, args) => HideDragLabels(args)), true);
+        _root.AddHandler(DragOverEvent, new DragEventHandler(PlannerDragOver), true);
+        _root.AddHandler(DropEvent, new DragEventHandler(PlannerDrop), true);
+        _root.AddHandler(DragLeaveEvent, new DragEventHandler(PlannerDragLeave), true);
         Loaded += (_, _) => { Subscribe(); Render(); }; Unloaded += (_, _) => Unsubscribe();
     }
     private void Subscribe()
@@ -31,6 +33,7 @@ public sealed partial class PlannerView : UserControl
         if (_subscribed) return; _subscribed = true;
         _vm.PropertyChanged += Changed; _vm.TaskEditorRequested += EditTask; _vm.ErrorRequested += ShowError;
         _vm.TaskDeleteRequested += DeleteTask; _vm.TaskMoveScopeRequested += ChooseTaskMoveScope;
+        DragTaskButton.ActiveDragEnded += ResetDrag;
         _vm.HabitEditorRequested += CreateHabit; _vm.HabitFinishRequested += FinishHabit;
         _vm.PaymentEditorRequested += EditPayment;
     }
@@ -39,12 +42,14 @@ public sealed partial class PlannerView : UserControl
         if (!_subscribed) return; _subscribed = false;
         _vm.PropertyChanged -= Changed; _vm.TaskEditorRequested -= EditTask; _vm.ErrorRequested -= ShowError;
         _vm.TaskDeleteRequested -= DeleteTask; _vm.TaskMoveScopeRequested -= ChooseTaskMoveScope;
+        DragTaskButton.ActiveDragEnded -= ResetDrag; ResetDrag(this, EventArgs.Empty);
         _vm.HabitEditorRequested -= CreateHabit; _vm.HabitFinishRequested -= FinishHabit;
         _vm.PaymentEditorRequested -= EditPayment;
     }
     private void Changed(object? sender, PropertyChangedEventArgs args) { if (args.PropertyName == nameof(PlannerViewModel.Revision)) Render(); }
     private void Render()
     {
+        _dropSlots.Clear(); ResetDrag(this, EventArgs.Empty);
         _root.Children.Clear(); _root.RowDefinitions.Clear(); _root.Padding = new(_floating ? 10 : 18);
         if (_floating) { _root.Children.Add(DayCard(_vm.Today, true)); return; }
         _root.RowDefinitions.Add(new() { Height = GridLength.Auto }); _root.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
@@ -125,7 +130,8 @@ public sealed partial class PlannerView : UserControl
         foreach (var task in _vm.TasksOn(date, part)) content.Children.Add(TaskBlock(task));
         var plus = Ui.Button(Ui.Icon("\uE710", 13), _vm.CreateTaskCommand, new TaskLocation(date, part), $"Создать задачу: {date:dd.MM}, {PartName(part)}");
         plus.Height = 28; plus.Padding = new(0); plus.HorizontalAlignment = HorizontalAlignment.Stretch;
-        plus.Visibility = Visibility.Collapsed; plus.Background = Ui.Brush(Ui.Paper); content.Children.Add(plus);
+        plus.Visibility = Visibility.Collapsed; plus.Background = Ui.Brush(Ui.Paper);
+        var insertion = new Border { Child = plus }; content.Children.Add(insertion);
         plus.RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => owner.SetInsertionSection((int)part, plus.Visibility == Visibility.Visible));
         var taskArea = new Border { Child = Ui.Scroll(content), BorderBrush = Ui.Brush("#F2F2F2"), BorderThickness = new(0, 0, 0, part == DayPart.Evening ? 0 : 1) };
         Ui.Add(layout, taskArea, 1);
@@ -135,7 +141,7 @@ public sealed partial class PlannerView : UserControl
         border.PointerExited += (_, _) => { pointerInside = false; if (plus.FocusState == FocusState.Unfocused) plus.Visibility = Visibility.Collapsed; };
         border.GotFocus += (_, _) => plus.Visibility = Visibility.Visible;
         border.LostFocus += (_, _) => { if (!pointerInside) plus.Visibility = Visibility.Collapsed; };
-        EnableDrop(border, date, part); return border;
+        EnableDrop(border, date, part, () => insertion); return border;
     }
     private static string PartName(DayPart part) => part switch { DayPart.Morning => "утро", DayPart.Afternoon => "день", _ => "вечер" };
     private UIElement TaskBlock(PlannerTask task, bool compact = false)
@@ -147,7 +153,7 @@ public sealed partial class PlannerView : UserControl
         {
             var check = Ui.OriginalIcon("Completed.png", 16); check.HorizontalAlignment = HorizontalAlignment.Right; check.VerticalAlignment = VerticalAlignment.Top; contents.Children.Add(check);
         }
-        var button = new DragTaskButton { Content = contents }; button.Padding = new(7, compact ? 3 : 5, 7, compact ? 3 : 5);
+        var button = new DragTaskButton { Content = contents, SourceTask = task }; button.Padding = new(7, compact ? 3 : 5, 7, compact ? 3 : 5);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, task.Description);
         button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         button.Background = Ui.Brush(Palette.TaskBackgrounds[(int)task.Kind]); button.CornerRadius = new(4);
@@ -194,14 +200,15 @@ public sealed partial class PlannerView : UserControl
         var layout = new Grid { RowSpacing = 12 }; layout.RowDefinitions.Add(new() { Height = GridLength.Auto }); layout.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) }); layout.RowDefinitions.Add(new() { Height = new(23) });
         var title = Ui.Text("НУЖНО РАСПРЕДЕЛИТЬ", 15, Ui.Muted, true); title.HorizontalAlignment = HorizontalAlignment.Center; Ui.Add(layout, title);
         int columns = _vm.Screen == PlannerScreen.Month ? 1 : 2;
-        var tasks = Ui.Grid(columns, gap: 8); tasks.RowDefinitions.Clear(); int rowCount = (_vm.Backlog.Count + columns - 1) / columns;
+        var tasks = Ui.Grid(columns, gap: 8); tasks.RowDefinitions.Clear(); int rowCount = _vm.Backlog.Count / columns + 1;
         for (int i = 0; i < rowCount; i++) tasks.RowDefinitions.Add(new() { Height = GridLength.Auto });
         for (int i = 0; i < _vm.Backlog.Count; i++) Ui.Add(tasks, TaskBlock(_vm.Backlog[i]), i % columns, i / columns);
+        var insertion = new Border { Height = 0, VerticalAlignment = VerticalAlignment.Top }; Ui.Add(tasks, insertion, _vm.Backlog.Count % columns, _vm.Backlog.Count / columns);
         tasks.VerticalAlignment = VerticalAlignment.Top; Ui.Add(layout, Ui.Scroll(tasks), row: 1);
         var plus = Ui.Button(Ui.Icon("\uE710", 14), _vm.CreateTaskCommand, new TaskLocation(null), "Добавить нераспределённую задачу");
         plus.HorizontalAlignment = HorizontalAlignment.Stretch; plus.Padding = new(0); plus.Background = Ui.Brush("#F5F5F5"); plus.Opacity = 0; Ui.Add(layout, plus, row: 2);
         var card = Ui.Card(layout); card.PointerEntered += (_, _) => plus.Opacity = 1; card.PointerExited += (_, _) => plus.Opacity = 0;
-        card.GotFocus += (_, _) => plus.Opacity = 1; card.LostFocus += (_, _) => plus.Opacity = 0; EnableDrop(card, null); return card;
+        card.GotFocus += (_, _) => plus.Opacity = 1; card.LostFocus += (_, _) => plus.Opacity = 0; EnableDrop(card, null, anchor: () => insertion); return card;
     }
     private UIElement MatrixCard()
     {
@@ -240,27 +247,6 @@ public sealed partial class PlannerView : UserControl
             backlog.Children.Add(row); stack.Children.Add(backlog); Ui.Add(layout, stack, row: 1);
         }
         return Ui.Card(layout);
-    }
-    private void EnableDrop(UIElement target, DateOnly? date, DayPart? part = null)
-    {
-        target.AllowDrop = true;
-        target.DragOver += (_, args) => { if (args.DataView.Contains(StandardDataFormats.Text)) { args.AcceptedOperation = DataPackageOperation.Move; HideDragLabels(args); args.Handled = true; } };
-        target.Drop += async (_, args) =>
-        {
-            var deferral = args.GetDeferral();
-            try
-            {
-                if (args.DataView.Contains(StandardDataFormats.Text) && Guid.TryParse(await args.DataView.GetTextAsync(), out var id))
-                { args.AcceptedOperation = DataPackageOperation.Move; _suppressClicksUntil = DateTime.UtcNow.AddMilliseconds(250); _vm.MoveTaskCommand.Execute(new TaskMove(id, date, part)); }
-                args.Handled = true;
-            }
-            catch (Exception ex) { await ErrorDialog(ex.Message); }
-            finally { deferral.Complete(); }
-        };
-    }
-    private static void HideDragLabels(DragEventArgs args)
-    {
-        args.DragUIOverride.IsCaptionVisible = false; args.DragUIOverride.IsGlyphVisible = false;
     }
     private bool OwnsDialogs => XamlRoot is not null && _floating == App.FloatingOwnsDialogs;
     private async void EditTask(object? sender, TaskEditRequest request)

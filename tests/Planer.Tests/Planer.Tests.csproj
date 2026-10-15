@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/Planer.App/Views/DragSnapTracker.cs" Link="DragSnapTracker.cs" />
     <ProjectReference Include="../../src/Planer.Core/Planer.Core.csproj" />
     <ProjectReference Include="../../src/Planer.Data/Planer.Data.csproj" />
   </ItemGroup>

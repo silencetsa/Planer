@@ -36,13 +36,18 @@ public sealed partial class PlannerView
         var number = Ui.Button(Ui.Text(date.Day.ToString(), 12, Ui.Muted, true), _vm.OpenWeekCommand, date, $"Открыть неделю: {date:dd.MM.yyyy}"); number.HorizontalAlignment = HorizontalAlignment.Left; number.Padding = new(0); Ui.Add(top, number);
         if (_vm.MoodOn(date) is { } mood) Ui.Add(top, Ui.Dot(Palette.MoodColors[(int)mood], true, 16), 1);
         Ui.Add(layout, top);
-        var tasks = new StackPanel { Spacing = 3 };
-        foreach (var payment in _vm.PaymentsOn(date)) tasks.Children.Add(PaymentBlock(payment, compact: true));
-        foreach (var t in _vm.TasksOn(date).OrderBy(t => t.Part).ThenBy(t => t.Order)) tasks.Children.Add(TaskBlock(t, compact: true));
+        var tasks = new StackPanel();
+        foreach (var payment in _vm.PaymentsOn(date)) { var bill = (FrameworkElement)PaymentBlock(payment, compact: true); bill.Margin = new(0, 0, 0, 3); tasks.Children.Add(bill); }
+        var anchors = new Border[3];
+        foreach (var part in Enum.GetValues<DayPart>())
+        {
+            foreach (var t in _vm.TasksOn(date, part)) { var card = (FrameworkElement)TaskBlock(t, compact: true); card.Margin = new(0, 0, 0, 3); tasks.Children.Add(card); }
+            anchors[(int)part] = new Border { Height = 0 }; tasks.Children.Add(anchors[(int)part]);
+        }
         Ui.Add(layout, Ui.Scroll(tasks), row: 1); Ui.Add(layout, ReadOnlyHabits(date, 8), row: 2);
         var border = Ui.Card(layout, 11); border.Padding = new(7); border.BorderThickness = new(date == _vm.Today ? 2 : 0); border.BorderBrush = Ui.Brush("#FAF03D");
         if (!belongsToMonth) border.Opacity = .43;
-        EnableDrop(border, date);
+        EnableDrop(border, date, anchor: () => anchors[(int)(DragTaskButton.Active?.SourceTask is { Date: not null } source ? source.Part : DayPart.Evening)]);
         border.Tapped += (_, args) =>
         {
             if (_taskDragInProgress || DateTime.UtcNow <= _suppressClicksUntil || IsInteractiveSource(args.OriginalSource as DependencyObject, border)) return;

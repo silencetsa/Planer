@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Planer.Core;
 using Planer.Data;
+using Planer_App.Views;
 
 int passed = 0, failed = 0;
 void Test(string name, Action action)
@@ -341,6 +342,30 @@ Test("Pale habit palette retains element identity including legacy colors", () =
 {
     Equal("#E0F8E5", Palette.PaleHabitColor("#0DBA30")); Equal("#DBEEFD", Palette.PaleHabitColor("#59ADF6"));
     Equal("#F5F5F5", Palette.PaleHabitColor("#99908C"));
+});
+
+Test("A drag keeps its original grab offset when the window scales", () =>
+{
+    Equal(new SnapPoint(70, 7), DragSnapTracker.GrabOffset(new(70, 7), 200, 26, 200, 26));
+    Equal(new SnapPoint(105, 10.5), DragSnapTracker.GrabOffset(new(70, 7), 200, 26, 300, 39));
+});
+Test("Snap engages within 10 pixels, holds at 10 and releases beyond 10", () =>
+{
+    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(100, 100))];
+    Equal<int?>(1, snap.Update(new(91, 100), slots, 10)); Equal<int?>(1, snap.Update(new(110, 100), slots, 10));
+    Equal<int?>(null, snap.Update(new(110.01, 100), slots, 10)); Equal<int?>(null, snap.Update(new(108, 108), slots, 10));
+});
+Test("Snap does not jump to another nearby slot until the held slot is left", () =>
+{
+    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(100, 100)), new(2, new(115, 100))];
+    Equal<int?>(1, snap.Update(new(100, 100), slots, 10)); Equal<int?>(1, snap.Update(new(109, 100), slots, 10));
+    Equal<int?>(2, snap.Update(new(111, 100), slots, 10)); snap.Reset(); Equal<int?>(1, snap.Update(new(107, 100), slots, 10));
+});
+Test("Removed targets and scaled pixel radius cannot leave a stale snap", () =>
+{
+    var snap = new DragSnapTracker(); SnapTarget[] slots = [new(1, new(100, 100))];
+    Equal<int?>(1, snap.Update(new(105, 100), slots, 5)); Equal<int?>(null, snap.Update(new(106, 100), slots, 5));
+    Equal<int?>(1, snap.Update(new(100, 100), slots, 5)); Equal<int?>(null, snap.Update(new(100, 100), [], 5));
 });
 
 Console.WriteLine($"{passed} passed, {failed} failed");
