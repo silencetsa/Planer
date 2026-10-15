@@ -48,6 +48,9 @@ public sealed class TaskSeries
     public bool Important { get; set; }
     public bool Urgent { get; set; }
     public long FirstIndex { get; set; }
+    // A part-only change can retain the original calendar anchor and start later in its sequence.
+    public long? ActiveFromIndex { get; set; }
+    public long BeginsAt => ActiveFromIndex ?? FirstIndex;
     // Exclusive. Null means the schedule continues indefinitely.
     public long? EndIndex { get; set; }
 }

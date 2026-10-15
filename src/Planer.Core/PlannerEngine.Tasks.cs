@@ -17,12 +17,13 @@ public sealed partial class PlannerEngine
         var existing = State.Tasks.Where(t => t.SeriesId is not null && t.OccurrenceIndex is not null)
             .Select(t => (t.SeriesId, t.OccurrenceIndex)).ToHashSet();
         long order = State.Tasks.Select(t => t.Order).DefaultIfEmpty(0).Max();
-        foreach (var series in State.TaskSeries.Where(s => s.Start is not null && (s.EndIndex is null || s.EndIndex > s.FirstIndex)))
+        foreach (var series in State.TaskSeries.Where(s => s.Start is not null && (s.EndIndex is null || s.EndIndex > s.BeginsAt)))
         {
             foreach (var (localIndex, date) in Recurrence.Between(series.Start!.Value, series.Repeat, first, last))
             {
                 long index = series.FirstIndex + localIndex;
                 if (series.EndIndex is { } end && index >= end) break;
+                if (index < series.BeginsAt) continue;
                 if (existing.Contains((series.Id, index))) continue;
                 yield return new PlannerTask { SeriesId = series.Id, OccurrenceIndex = index, Date = date, Part = series.Part,
                     Description = series.Description, Important = series.Important, Urgent = series.Urgent, Repeat = series.Repeat, Order = ++order };
@@ -48,7 +49,7 @@ public sealed partial class PlannerEngine
     private void StopChainFrom(Guid chainId, long index)
     {
         foreach (var segment in State.TaskSeries.Where(s => s.ChainId == chainId))
-            segment.EndIndex = Math.Min(segment.EndIndex ?? long.MaxValue, Math.Max(segment.FirstIndex, index));
+            segment.EndIndex = Math.Min(segment.EndIndex ?? long.MaxValue, Math.Max(segment.BeginsAt, index));
     }
 
     private void ChangeTaskRepeat(PlannerTask task, Repeat repeat)
@@ -69,16 +70,20 @@ public sealed partial class PlannerEngine
         var nextPart = part ?? (task.Date is null ? DayPart.Evening : task.Part);
         if (scope == TaskMoveScope.ThisAndFuture && series is not null && task.OccurrenceIndex is { } index)
         {
+            bool keepCalendarAnchor = date is not null && date == task.Date && series.Start is { } anchor
+                && Recurrence.DateAt(anchor, series.Repeat, index - series.FirstIndex) == date;
             // Keep existing instance state (including completion), but re-anchor its future schedule.
             var future = State.Tasks.Where(t => BelongsToChain(t, series.ChainId) && t.OccurrenceIndex >= index).ToList();
             StopChainFrom(series.ChainId, index);
             task.Date = date; task.Part = nextPart;
             StartTaskSeries(task, series.ChainId, index);
             var next = SeriesFor(task)!;
+            if (keepCalendarAnchor)
+            { next.Start = series.Start; next.FirstIndex = series.FirstIndex; next.ActiveFromIndex = index; }
             foreach (var instance in future.Where(t => t.Id != task.Id))
             {
                 if (date is null) { State.Tasks.Remove(instance); continue; }
-                instance.Date = Recurrence.DateAt(date.Value, next.Repeat, instance.OccurrenceIndex!.Value - index);
+                instance.Date = Recurrence.DateAt(next.Start!.Value, next.Repeat, instance.OccurrenceIndex!.Value - next.FirstIndex);
                 if (instance.Date is null) { State.Tasks.Remove(instance); continue; }
                 instance.SeriesId = next.Id; instance.Part = nextPart;
             }

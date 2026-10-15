@@ -272,6 +272,23 @@ Test("Deleting a recurring task removes current and all unseen future instances,
     e = new PlannerEngine(store, clock); Equal(first.Id, e.TasksOn(clock.Today).Single().Id); Equal(true, e.TasksOn(clock.Today).Single().Completed);
     Equal(0, e.Matrix(clock.Today.AddDays(7), clock.Today.AddYears(2)).Scheduled.Sum());
 });
+Test("Changing only the day part retains monthly 31st and yearly leap-day anchors", () =>
+{
+    var (e, _, store) = Setup(new(2028, 1, 31));
+    var first = e.AddTask("month part", false, false, new(2028, 1, 31), DayPart.Morning, Repeat.Monthly);
+    var february = e.TasksOn(new(2028, 2, 29)).Single(); var march = e.TasksOn(new(2028, 3, 31)).Single();
+    e.MoveTask(february.Id, february.Date, DayPart.Evening, TaskMoveScope.ThisAndFuture);
+    Equal(DayPart.Morning, first.Part); Equal(march.Id, e.TasksOn(new(2028, 3, 31)).Single().Id);
+    Equal(DayPart.Evening, e.TasksOn(new(2028, 4, 30)).Single().Part); Equal(0, e.TasksOn(new(2028, 3, 29)).Count());
+    var annual = e.AddTask("year part", false, false, new(2028, 2, 29), DayPart.Morning, Repeat.Yearly);
+    var nextYear = e.TasksOn(new(2029, 2, 28)).Single(t => t.Description == "year part");
+    e.MoveTask(nextYear.Id, nextYear.Date, DayPart.Afternoon, TaskMoveScope.ThisAndFuture);
+    e = new PlannerEngine(store, new TestClock { Today = new(2028, 1, 31) });
+    Equal(DayPart.Morning, e.TaskById(annual.Id)!.Part);
+    Equal(DayPart.Afternoon, e.TasksOn(new(2032, 2, 29)).Single(t => t.Description == "year part").Part);
+    Equal(0, e.TasksOn(new(2032, 2, 28)).Count(t => t.Description == "year part"));
+    e.DeleteTask(february.Id); Equal(0, e.TasksOn(new(2028, 3, 31)).Count(t => t.Description == "month part"));
+});
 Test("Deleting before a changed segment stops that segment too", () =>
 {
     var (e, clock, _) = Setup(); var first = e.AddTask("split", false, false, clock.Today, repeat: Repeat.Weekly);
