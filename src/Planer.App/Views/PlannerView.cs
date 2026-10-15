@@ -30,6 +30,7 @@ public sealed partial class PlannerView : UserControl
     {
         if (_subscribed) return; _subscribed = true;
         _vm.PropertyChanged += Changed; _vm.TaskEditorRequested += EditTask; _vm.ErrorRequested += ShowError;
+        _vm.TaskDeleteRequested += DeleteTask; _vm.TaskMoveScopeRequested += ChooseTaskMoveScope;
         _vm.HabitEditorRequested += CreateHabit; _vm.HabitFinishRequested += FinishHabit;
         _vm.PaymentEditorRequested += EditPayment;
     }
@@ -37,6 +38,7 @@ public sealed partial class PlannerView : UserControl
     {
         if (!_subscribed) return; _subscribed = false;
         _vm.PropertyChanged -= Changed; _vm.TaskEditorRequested -= EditTask; _vm.ErrorRequested -= ShowError;
+        _vm.TaskDeleteRequested -= DeleteTask; _vm.TaskMoveScopeRequested -= ChooseTaskMoveScope;
         _vm.HabitEditorRequested -= CreateHabit; _vm.HabitFinishRequested -= FinishHabit;
         _vm.PaymentEditorRequested -= EditPayment;
     }
@@ -263,12 +265,13 @@ public sealed partial class PlannerView : UserControl
         var description = new TextBox { Text = request.Description, Header = "Описание задачи", PlaceholderText = "Что нужно сделать?", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 96, MaxHeight = 250, MaxLength = 10000 };
         var important = new PrioritySwitch(request.Important, "Важное");
         var urgent = new PrioritySwitch(request.Urgent, "Срочное");
+        var repeat = new ComboBox { Header = "Повтор", ItemsSource = TaskRepeatNames, SelectedIndex = (int)request.Repeat, HorizontalAlignment = HorizontalAlignment.Stretch };
         var validation = Ui.Text("", 12, "#BD3026"); var contents = new StackPanel { Spacing = 16, MinWidth = 340 }; contents.Children.Add(description);
         contents.Children.Add(Ui.PriorityRow("Неважное", important, "Важное"));
-        contents.Children.Add(Ui.PriorityRow("Несрочное", urgent, "Срочное")); contents.Children.Add(validation);
+        contents.Children.Add(Ui.PriorityRow("Несрочное", urgent, "Срочное")); contents.Children.Add(repeat); contents.Children.Add(validation);
         var dialog = Ui.Dialog(XamlRoot, request.Id is null ? "Новая задача" : "Редактировать задачу", contents, scale: _scaleHost.ScaleFactor);
         dialog.PrimaryButtonClick += (_, args) => { if (string.IsNullOrWhiteSpace(description.Text)) { validation.Text = "Введите описание задачи"; args.Cancel = true; } };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary) _vm.SaveTask(request, description.Text, important.IsChecked == true, urgent.IsChecked == true);
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary) _vm.SaveTask(request, description.Text, important.IsChecked == true, urgent.IsChecked == true, (Repeat)repeat.SelectedIndex);
     }
     private async void ShowError(object? sender, string message) { if (OwnsDialogs) await ErrorDialog(message); }
     private async Task ErrorDialog(string message)

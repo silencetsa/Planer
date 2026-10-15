@@ -21,6 +21,9 @@ $planerCases = @(
     @{ Name='task-dialog'; View='Week'; Scenario='TaskDialog' },
     @{ Name='task-dialog-on'; View='Week'; Scenario='TaskDialogOn' },
     @{ Name='task-dialog-large'; View='Week'; Scenario='TaskDialog'; Large=$true },
+    @{ Name='delete-task-dialog'; View='Week'; Scenario='DeleteTaskDialog' },
+    @{ Name='delete-recurring-dialog'; View='Week'; Scenario='DeleteRecurringDialog'; Separate=$true },
+    @{ Name='move-recurring-dialog'; View='Week'; Scenario='MoveRecurringDialog'; Separate=$true },
     @{ Name='habit-dialog'; View='Habits'; Scenario='HabitDialog'; Empty=$true },
     @{ Name='payment-dialog'; View='Payments'; Scenario='PaymentDialog' },
     @{ Name='finish-habit-dialog'; View='Habits'; Scenario='FinishHabitDialog' },
@@ -33,7 +36,7 @@ foreach ($planerCase in $planerCases) {
     $planerErrorPath = $planerImagePath + '.error.txt'
     if (Test-Path -LiteralPath $planerErrorPath) { Remove-Item -LiteralPath $planerErrorPath }
     if (Test-Path -LiteralPath $planerImagePath) { Remove-Item -LiteralPath $planerImagePath }
-    $planerCaseData = if ($planerCase.Empty) { Join-Path $planerQaRunDir 'empty' } else { $planerDataDir }
+    $planerCaseData = if ($planerCase.Empty) { Join-Path $planerQaRunDir 'empty' } elseif ($planerCase.Separate) { Join-Path $planerQaRunDir $planerScreen } else { $planerDataDir }
     $planerArgs = @('--data-dir', ('"' + $planerCaseData + '"'), '--view', $planerCase.View, '--capture', ('"' + $planerImagePath + '"'))
     if (!$planerCase.Empty) { $planerArgs += '--demo' }
     if ($planerCase.Scenario) { $planerArgs += @('--scenario', $planerCase.Scenario) }

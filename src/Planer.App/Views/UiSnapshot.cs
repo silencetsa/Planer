@@ -30,6 +30,14 @@ internal static class UiSnapshot
         switch (scenario)
         {
             case "TaskDialog": case "TaskDialogOn": vm.CreateTaskCommand.Execute(new TaskLocation(vm.Today, DayPart.Evening)); break;
+            case "DeleteTaskDialog": vm.DeleteTaskCommand.Execute(vm.TasksOn(vm.Today).First().Id); break;
+            case "DeleteRecurringDialog": case "MoveRecurringDialog":
+                var request = new TaskEditRequest(null, "Повторяющаяся задача", true, false, new(vm.Today, DayPart.Morning));
+                vm.SaveTask(request, request.Description, request.Important, request.Urgent, Repeat.Weekly);
+                var recurring = vm.TasksOn(vm.Today).First(t => t.Description == request.Description);
+                if (scenario == "DeleteRecurringDialog") vm.DeleteTaskCommand.Execute(recurring.Id);
+                else vm.MoveTaskCommand.Execute(new TaskMove(recurring.Id, vm.Today.AddDays(1), DayPart.Afternoon));
+                break;
             case "HabitDialog": vm.CreateHabitCommand.Execute(null); break;
             case "PaymentDialog": vm.CreatePaymentCommand.Execute(null); break;
             case "FinishHabitDialog": vm.FinishHabitCommand.Execute(vm.Habits.First(h => h.Ended is null).Id); break;

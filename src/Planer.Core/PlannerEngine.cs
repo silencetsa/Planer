@@ -1,7 +1,7 @@
 namespace Planer.Core;
 
 /// <summary>All planner rules. Independent of WinUI, deterministic with an injected clock.</summary>
-public sealed class PlannerEngine
+public sealed partial class PlannerEngine
 {
     private readonly IPlannerStore _store;
     private readonly IPlannerClock _clock;
@@ -30,6 +30,8 @@ public sealed class PlannerEngine
         if (State.LastRolloverWeek is not null && week <= State.LastRolloverWeek) return false;
         Commit(() =>
         {
+            // Materialize missed occurrences before rollover, including time spent with the app closed.
+            MaterializeTasks(DateOnly.MinValue, week.AddDays(-1));
             foreach (var task in State.Tasks.Where(t => !t.Completed && t.Date is not null && t.Date < week))
                 task.Date = null;
             State.LastRolloverWeek = week;
@@ -37,28 +39,36 @@ public sealed class PlannerEngine
         return true;
     }
 
-    public PlannerTask AddTask(string description, bool important, bool urgent, DateOnly? date, DayPart part = DayPart.Evening)
+    public PlannerTask AddTask(string description, bool important, bool urgent, DateOnly? date, DayPart part = DayPart.Evening, Repeat repeat = Repeat.None)
     {
         ValidateDescription(description);
-        var task = new PlannerTask { Description = description.Trim(), Important = important, Urgent = urgent, Date = date, Part = part,
+        ValidateRepeat(repeat);
+        var task = new PlannerTask { Description = description.Trim(), Important = important, Urgent = urgent, Date = date, Part = part, Repeat = repeat,
             Order = State.Tasks.Select(t => t.Order).DefaultIfEmpty(0).Max() + 1 };
-        Commit(() => State.Tasks.Add(task));
+        Commit(() => { State.Tasks.Add(task); if (repeat != Repeat.None && date is not null) StartTaskSeries(task); });
         return task;
     }
 
-    public void EditTask(Guid id, string description, bool important, bool urgent)
+    public void EditTask(Guid id, string description, bool important, bool urgent, Repeat? repeat = null)
     {
         ValidateDescription(description);
-        Commit(() => { var task = FindTask(id); task.Description = description.Trim(); task.Important = important; task.Urgent = urgent; });
+        if (repeat is { } value) ValidateRepeat(value);
+        Commit(() =>
+        {
+            var task = FindTask(id); task.Description = description.Trim(); task.Important = important; task.Urgent = urgent;
+            if (repeat is { } next && task.Repeat != next) ChangeTaskRepeat(task, next);
+        });
     }
     public void ToggleTask(Guid id) => Commit(() => { var task = FindTask(id); task.Completed = !task.Completed; });
-    public void DeleteTask(Guid id) => Commit(() => State.Tasks.Remove(FindTask(id)));
-    public void MoveTask(Guid id, DateOnly? date, DayPart? part = null) => Commit(() =>
+    public void DeleteTask(Guid id) => Commit(() =>
     {
         var task = FindTask(id);
-        task.Part = part ?? (task.Date is null ? DayPart.Evening : task.Part);
-        task.Date = date;
-        task.Order = State.Tasks.Select(x => x.Order).DefaultIfEmpty(0).Max() + 1;
+        if (SeriesFor(task) is { } series && task.OccurrenceIndex is { } index)
+        {
+            StopChainFrom(series.ChainId, index);
+            State.Tasks.RemoveAll(t => BelongsToChain(t, series.ChainId) && t.OccurrenceIndex >= index);
+        }
+        else State.Tasks.Remove(task);
     });
     private PlannerTask FindTask(Guid id) => State.Tasks.First(t => t.Id == id);
     private static void ValidateDescription(string value)
@@ -67,11 +77,15 @@ public sealed class PlannerEngine
         if (value.Length > 10000) throw new ArgumentException("Описание — не более 10000 знаков");
     }
 
-    public IEnumerable<PlannerTask> TasksOn(DateOnly date, DayPart? part = null) => State.Tasks
-        .Where(t => t.Date == date && (part is null || t.Part == part)).OrderBy(t => t.Order);
+    public IEnumerable<PlannerTask> TasksOn(DateOnly date, DayPart? part = null)
+    {
+        EnsureTaskRange(date, date);
+        return State.Tasks.Where(t => t.Date == date && (part is null || t.Part == part)).OrderBy(t => t.Order);
+    }
     public IEnumerable<PlannerTask> Backlog => State.Tasks.Where(t => t.Date is null).OrderBy(t => t.Order);
     public MatrixCounts Matrix(DateOnly first, DateOnly last)
     {
+        EnsureTaskRange(first, last);
         int[] scheduled = new int[4], unscheduled = new int[4];
         foreach (var task in State.Tasks)
         {

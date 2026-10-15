@@ -38,7 +38,7 @@ public static partial class Ui
         Add(row, leftText); Add(row, toggle, 1); Add(row, Text(right, 14, Muted), 2);
         return row;
     }
-    public static ContentDialog Dialog(XamlRoot root, string title, UIElement content, string primary = "Сохранить", string close = "Отмена", double scale = 1, bool defaultClose = false)
+    public static ContentDialog Dialog(XamlRoot root, string title, UIElement content, string primary = "Сохранить", string close = "Отмена", double scale = 1, bool defaultClose = false, bool destructive = false)
     {
         PrepareFields(content);
         var dialog = new ContentDialog
@@ -48,13 +48,13 @@ public static partial class Ui
             Title = Text(title, GoalTitleSize * scale, Accent, true), Content = content,
             PrimaryButtonText = primary, CloseButtonText = close,
             DefaultButton = string.IsNullOrEmpty(primary) || defaultClose ? ContentDialogButton.Close : ContentDialogButton.Primary,
-            PrimaryButtonStyle = DialogButtonStyle(Palette.TaskBackgrounds[2], Palette.TaskForegrounds[2], scale),
+            PrimaryButtonStyle = DialogButtonStyle(Palette.TaskBackgrounds[destructive ? 0 : 2], Palette.TaskForegrounds[destructive ? 0 : 2], scale),
             CloseButtonStyle = DialogButtonStyle(Palette.TaskBackgrounds[0], Palette.TaskForegrounds[0], scale)
         };
         foreach (string key in new[] { "ContentDialogBackground", "ContentDialogTopOverlay" }) dialog.Resources[key] = Brush(Paper);
         dialog.Resources["ContentDialogSeparatorBorderBrush"] = Brush("#00FFFFFF");
         // WinUI applies AccentButtonStyle to the default action, even when its button style is set.
-        int defaultKind = string.IsNullOrEmpty(primary) || defaultClose ? 0 : 2;
+        int defaultKind = string.IsNullOrEmpty(primary) || defaultClose || destructive ? 0 : 2;
         foreach (string suffix in new[] { "", "PointerOver", "Pressed", "Disabled" })
         {
             dialog.Resources["AccentButtonBackground" + suffix] = Brush(Palette.TaskBackgrounds[defaultKind]);

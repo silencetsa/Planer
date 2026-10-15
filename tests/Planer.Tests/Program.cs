@@ -206,6 +206,137 @@ Test("Day layout retains equal sections when all are occupied or already fit", (
     Equal(true, DaySectionLayout.Allocate(300, [80, 25, 80], [true, false, true]).All(h => h == 100));
 });
 
+Test("Recurring tasks use weekly and fortnightly weekdays without a future horizon", () =>
+{
+    var (e, clock, _) = Setup(new(2026, 10, 12));
+    e.AddTask("weekly", true, false, clock.Today, DayPart.Morning, Repeat.Weekly);
+    e.AddTask("fortnightly", false, true, clock.Today, DayPart.Afternoon, Repeat.Fortnightly);
+    Equal(1, e.TasksOn(clock.Today.AddDays(7)).Count()); Equal(2, e.TasksOn(clock.Today.AddDays(14)).Count());
+    var distant = new DateOnly(2090, 1, 1); e.EnsureTaskRange(distant, distant.AddDays(6));
+    if (e.State.Tasks.Count > 8) throw new Exception("Opening a distant week materialized intervening decades");
+});
+Test("Monthly and yearly task anchors restore the 31st and leap day", () =>
+{
+    var (e, _, _) = Setup(new(2028, 1, 31));
+    e.AddTask("month", false, false, new(2028, 1, 31), repeat: Repeat.Monthly);
+    Equal(1, e.TasksOn(new(2028, 2, 29)).Count()); Equal(1, e.TasksOn(new(2028, 3, 31)).Count());
+    Equal(0, e.TasksOn(new(2028, 3, 29)).Count());
+    e.AddTask("year", true, false, new(2028, 2, 29), repeat: Repeat.Yearly);
+    Equal("year", e.TasksOn(new(2029, 2, 28)).Single(t => t.Description == "year").Description);
+    Equal(1, e.TasksOn(new(2032, 2, 29)).Count(t => t.Description == "year"));
+});
+Test("An unassigned recurring task starts only when assigned, defaulting to evening", () =>
+{
+    var (e, clock, _) = Setup(); var task = e.AddTask("pending", false, false, null, repeat: Repeat.Weekly);
+    e.EnsureTaskRange(clock.Today, clock.Today.AddYears(5)); Equal(1, e.State.Tasks.Count); Equal(0, e.State.TaskSeries.Count);
+    e.MoveTask(task.Id, clock.Today); Equal(DayPart.Evening, task.Part);
+    Equal(1, e.TasksOn(clock.Today.AddDays(7)).Count()); Equal(0, e.Backlog.Count());
+});
+Test("Completion and text edits affect only one recurring occurrence", () =>
+{
+    var (e, clock, _) = Setup(); var t = e.AddTask("original", true, false, clock.Today, repeat: Repeat.Weekly);
+    var next = e.TasksOn(clock.Today.AddDays(7)).Single(); e.ToggleTask(t.Id); e.EditTask(t.Id, "edited", false, true);
+    Equal(false, next.Completed); Equal("original", next.Description); Equal("edited", t.Description);
+    Equal("original", e.TasksOn(clock.Today.AddDays(14)).Single().Description);
+});
+Test("Moving one occurrence neither moves nor regenerates other occurrences after restart", () =>
+{
+    var (e, clock, store) = Setup(); var first = e.AddTask("move one", false, false, clock.Today, DayPart.Morning, Repeat.Weekly);
+    var next = e.TasksOn(clock.Today.AddDays(7)).Single(); e.MoveTask(next.Id, clock.Today.AddDays(8));
+    e = new PlannerEngine(store, clock);
+    Equal(0, e.TasksOn(clock.Today.AddDays(7)).Count()); Equal(next.Id, e.TasksOn(clock.Today.AddDays(8)).Single().Id);
+    Equal(DayPart.Morning, e.TasksOn(clock.Today.AddDays(8)).Single().Part);
+    Equal(first.Id, e.TasksOn(clock.Today).Single().Id); Equal(1, e.TasksOn(clock.Today.AddDays(14)).Count());
+});
+Test("Moving future chain preserves earlier history and occurrence completion", () =>
+{
+    var (e, clock, _) = Setup(); var first = e.AddTask("chain", true, false, clock.Today, DayPart.Morning, Repeat.Weekly); e.ToggleTask(first.Id);
+    var next = e.TasksOn(clock.Today.AddDays(7)).Single(); var third = e.TasksOn(clock.Today.AddDays(14)).Single(); e.ToggleTask(third.Id);
+    e.MoveTask(next.Id, clock.Today.AddDays(9), DayPart.Afternoon, TaskMoveScope.ThisAndFuture);
+    Equal<DateOnly?>(clock.Today, first.Date); Equal(true, first.Completed); Equal(0, e.TasksOn(clock.Today.AddDays(7)).Count());
+    var moved = e.TasksOn(clock.Today.AddDays(16)).Single(); Equal(third.Id, moved.Id); Equal(true, moved.Completed); Equal(DayPart.Afternoon, moved.Part);
+    Equal(1, e.TasksOn(clock.Today.AddDays(23)).Count()); Equal(0, e.TasksOn(clock.Today.AddDays(21)).Count());
+});
+Test("Reanchoring monthly future tasks uses the new day without changing previous months", () =>
+{
+    var (e, _, _) = Setup(new(2026, 1, 31)); var first = e.AddTask("monthly", false, false, new(2026, 1, 31), repeat: Repeat.Monthly);
+    var next = e.TasksOn(new(2026, 2, 28)).Single(); e.MoveTask(next.Id, new(2026, 2, 27), scope: TaskMoveScope.ThisAndFuture);
+    Equal(first.Id, e.TasksOn(new(2026, 1, 31)).Single().Id); Equal(0, e.TasksOn(new(2026, 3, 31)).Count());
+    Equal(1, e.TasksOn(new(2026, 3, 27)).Count());
+});
+Test("Deleting a recurring task removes current and all unseen future instances, preserving earlier ones", () =>
+{
+    var (e, clock, store) = Setup(); var first = e.AddTask("delete", false, false, clock.Today, repeat: Repeat.Weekly); e.ToggleTask(first.Id);
+    var next = e.TasksOn(clock.Today.AddDays(7)).Single(); e.TasksOn(clock.Today.AddDays(14)).ToList(); e.DeleteTask(next.Id);
+    e = new PlannerEngine(store, clock); Equal(first.Id, e.TasksOn(clock.Today).Single().Id); Equal(true, e.TasksOn(clock.Today).Single().Completed);
+    Equal(0, e.Matrix(clock.Today.AddDays(7), clock.Today.AddYears(2)).Scheduled.Sum());
+});
+Test("Deleting before a changed segment stops that segment too", () =>
+{
+    var (e, clock, _) = Setup(); var first = e.AddTask("split", false, false, clock.Today, repeat: Repeat.Weekly);
+    var next = e.TasksOn(clock.Today.AddDays(7)).Single(); e.MoveTask(next.Id, clock.Today.AddDays(8), scope: TaskMoveScope.ThisAndFuture);
+    e.DeleteTask(first.Id); Equal(0, e.Matrix(clock.Today, clock.Today.AddYears(1)).Scheduled.Sum());
+});
+Test("Rollover materializes missed recurring tasks once, keeping completed history and future dates", () =>
+{
+    var (e, clock, store) = Setup(new(2026, 10, 12)); var first = e.AddTask("roll", false, false, clock.Today, repeat: Repeat.Weekly); e.ToggleTask(first.Id);
+    var future = e.TasksOn(new(2026, 11, 9)).Single(); clock.Today = new(2026, 11, 2); e = new PlannerEngine(store, clock);
+    Equal(2, e.Backlog.Count()); Equal(1, e.TasksOn(new(2026, 10, 12)).Count()); Equal(future.Id, e.TasksOn(new(2026, 11, 9)).Single().Id);
+    Equal(0, e.TasksOn(new(2026, 10, 19)).Count()); Equal(0, e.TasksOn(new(2026, 10, 26)).Count());
+    e = new PlannerEngine(store, clock); Equal(2, e.Backlog.Count());
+    var backlog = e.Backlog.First(); e.MoveTask(backlog.Id, new(2026, 10, 20)); e.ToggleTask(backlog.Id);
+    e = new PlannerEngine(store, clock); Equal(1, e.Backlog.Count()); Equal(true, e.TasksOn(new(2026, 10, 20)).Single().Completed);
+});
+Test("Moving an entire chain to backlog pauses it until reassignment without an infinite queue", () =>
+{
+    var (e, clock, _) = Setup(); var first = e.AddTask("pause", false, false, clock.Today, repeat: Repeat.Weekly);
+    var next = e.TasksOn(clock.Today.AddDays(7)).Single(); e.TasksOn(clock.Today.AddDays(14)).ToList();
+    e.MoveTask(next.Id, null, scope: TaskMoveScope.ThisAndFuture); e.EnsureTaskRange(clock.Today, clock.Today.AddYears(2));
+    Equal(1, e.Backlog.Count()); Equal(1, e.Matrix(clock.Today, clock.Today.AddYears(2)).Scheduled.Sum());
+    e.MoveTask(next.Id, clock.Today.AddDays(10)); Equal(1, e.TasksOn(clock.Today.AddDays(17)).Count());
+    Equal(first.Id, e.TasksOn(clock.Today).Single().Id);
+});
+Test("Changing recurrence truncates only the selected and subsequent schedule", () =>
+{
+    var (e, clock, _) = Setup(); var first = e.AddTask("change", false, false, clock.Today, repeat: Repeat.Weekly);
+    var next = e.TasksOn(clock.Today.AddDays(7)).Single(); e.EditTask(next.Id, "monthly", true, false, Repeat.Monthly);
+    Equal(first.Id, e.TasksOn(clock.Today).Single().Id); Equal(0, e.TasksOn(clock.Today.AddDays(14)).Count());
+    Equal(1, e.TasksOn(clock.Today.AddDays(7).AddMonths(1)).Count());
+    e.EditTask(next.Id, "single", false, false, Repeat.None); Equal(0, e.TasksOn(clock.Today.AddDays(7).AddMonths(1)).Count());
+    Equal(next.Id, e.TasksOn(clock.Today.AddDays(7)).Single().Id);
+});
+Test("Failed series reschedule rolls back dates, segments and completion atomically", () =>
+{
+    var (e, clock, store) = Setup(); var first = e.AddTask("atomic", false, false, clock.Today, repeat: Repeat.Weekly);
+    var next = e.TasksOn(clock.Today.AddDays(7)).Single(); e.ToggleTask(next.Id); store.FailSave = true;
+    Throws<IOException>(() => e.MoveTask(first.Id, clock.Today.AddDays(1), scope: TaskMoveScope.ThisAndFuture));
+    Equal(1, e.State.TaskSeries.Count); Equal<DateOnly?>(clock.Today, e.TaskById(first.Id)!.Date);
+    Equal(true, e.TaskById(next.Id)!.Completed); Equal<DateOnly?>(clock.Today.AddDays(7), e.TaskById(next.Id)!.Date);
+});
+Test("SQLite stores series splits, moved exceptions and independent completion", () =>
+{
+    var dir = Path.Combine(Path.GetTempPath(), "PlanerTests", Guid.NewGuid().ToString()); var path = Path.Combine(dir, "planner.db");
+    var clock = new TestClock { Today = new(2026, 10, 13) }; var e = new PlannerEngine(new SqlitePlannerStore(path), clock);
+    var first = e.AddTask("sqlite repeat", true, true, clock.Today, repeat: Repeat.Weekly); e.ToggleTask(first.Id);
+    var second = e.TasksOn(clock.Today.AddDays(7)).Single(); e.MoveTask(second.Id, clock.Today.AddDays(9), scope: TaskMoveScope.ThisAndFuture);
+    var third = e.TasksOn(clock.Today.AddDays(16)).Single(); e.MoveTask(third.Id, null);
+    e = new PlannerEngine(new SqlitePlannerStore(path), clock); Equal(2, e.State.TaskSeries.Count); Equal(1, e.Backlog.Count());
+    Equal(true, e.TasksOn(clock.Today).Single().Completed); Equal(0, e.TasksOn(clock.Today.AddDays(16)).Count());
+    Equal(1, e.TasksOn(clock.Today.AddDays(23)).Count()); Directory.Delete(dir, true);
+});
+Test("Old SQLite tasks migrate with no repeat and keep their IDs and dates", () =>
+{
+    var dir = Path.Combine(Path.GetTempPath(), "PlanerTests", Guid.NewGuid().ToString()); Directory.CreateDirectory(dir); var path = Path.Combine(dir, "planner.db");
+    var id = Guid.NewGuid();
+    using (var c = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False"))
+    {
+        c.Open(); using var command = c.CreateCommand(); command.CommandText = "CREATE TABLE tasks(id TEXT PRIMARY KEY,data TEXT NOT NULL);PRAGMA user_version=1;INSERT INTO tasks VALUES($id,$data)";
+        command.Parameters.AddWithValue("$id", id.ToString()); command.Parameters.AddWithValue("$data", $$"""{"Id":"{{id}}","Description":"legacy","Date":"2026-10-13","Part":0,"Completed":true} """); command.ExecuteNonQuery();
+    }
+    var e = new PlannerEngine(new SqlitePlannerStore(path), new TestClock { Today = new(2026, 10, 13) });
+    var task = e.State.Tasks.Single(); Equal(id, task.Id); Equal(Repeat.None, task.Repeat); Equal(true, task.Completed); Equal(0, e.State.TaskSeries.Count);
+    Equal<DateOnly?>(new(2026, 10, 13), task.Date); Directory.Delete(dir, true);
+});
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;
 

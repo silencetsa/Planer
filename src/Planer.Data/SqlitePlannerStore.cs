@@ -10,7 +10,7 @@ public sealed class SqlitePlannerStore : IPlannerStore
 {
     public string DatabasePath { get; }
     private readonly string _connectionString;
-    private static readonly string[] Tables = ["tasks", "habits", "habit_checks", "payments", "payment_checks", "moods", "goals", "notes", "metadata"];
+    private static readonly string[] Tables = ["tasks", "task_series", "habits", "habit_checks", "payments", "payment_checks", "moods", "goals", "notes", "metadata"];
 
     public SqlitePlannerStore(string path)
     {
@@ -19,7 +19,7 @@ public sealed class SqlitePlannerStore : IPlannerStore
         _connectionString = new SqliteConnectionStringBuilder { DataSource = DatabasePath, Pooling = false, DefaultTimeout = 5 }.ToString();
         using var c = Open();
         using var command = c.CreateCommand();
-        command.CommandText = "PRAGMA journal_mode=WAL; PRAGMA user_version=1;" + string.Join("", Tables.Select(t => $"CREATE TABLE IF NOT EXISTS {t}(id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL);"));
+        command.CommandText = "PRAGMA journal_mode=WAL; PRAGMA user_version=2;" + string.Join("", Tables.Select(t => $"CREATE TABLE IF NOT EXISTS {t}(id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL);"));
         command.ExecuteNonQuery();
     }
     private SqliteConnection Open()
@@ -34,6 +34,7 @@ public sealed class SqlitePlannerStore : IPlannerStore
         var s = new PlannerState
         {
             Tasks = Read<PlannerTask>(c, "tasks"), Habits = Read<Habit>(c, "habits"),
+            TaskSeries = Read<TaskSeries>(c, "task_series"),
             HabitChecks = Read<HabitCheck>(c, "habit_checks"), Payments = Read<Payment>(c, "payments"),
             PaymentChecks = Read<PaymentCheck>(c, "payment_checks")
         };
@@ -60,6 +61,7 @@ public sealed class SqlitePlannerStore : IPlannerStore
         using var c = Open();
         using var transaction = c.BeginTransaction();
         Write(c, transaction, "tasks", s.Tasks.Select(x => (x.Id.ToString(), JsonSerializer.Serialize(x))));
+        Write(c, transaction, "task_series", s.TaskSeries.Select(x => (x.Id.ToString(), JsonSerializer.Serialize(x))));
         Write(c, transaction, "habits", s.Habits.Select(x => (x.Id.ToString(), JsonSerializer.Serialize(x))));
         Write(c, transaction, "habit_checks", s.HabitChecks.Select(x => ($"{x.HabitId}:{x.Date:yyyy-MM-dd}", JsonSerializer.Serialize(x))));
         Write(c, transaction, "payments", s.Payments.Select(x => (x.Id.ToString(), JsonSerializer.Serialize(x))));

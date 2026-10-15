@@ -15,6 +15,9 @@ public sealed class PlannerTask
     public DateOnly? Date { get; set; }
     public DayPart Part { get; set; } = DayPart.Evening;
     public long Order { get; set; }
+    public Repeat Repeat { get; set; }
+    public Guid? SeriesId { get; set; }
+    public long? OccurrenceIndex { get; set; }
     public TaskKind Kind => (Urgent, Important) switch
     {
         (true, true) => TaskKind.UrgentImportant,
@@ -54,16 +57,7 @@ public sealed class PaymentRevision
     public bool OccursOn(DateOnly date)
     {
         if (date < Start || (End is not null && date > End)) return false;
-        int days = date.DayNumber - Start.DayNumber;
-        return Repeat switch
-        {
-            Repeat.None => date == Start,
-            Repeat.Weekly => days % 7 == 0,
-            Repeat.Fortnightly => days % 14 == 0,
-            Repeat.Monthly => date.Day == Math.Min(Start.Day, DateTime.DaysInMonth(date.Year, date.Month)),
-            Repeat.Yearly => date.Month == Start.Month && date.Day == Math.Min(Start.Day, DateTime.DaysInMonth(date.Year, Start.Month)),
-            _ => false
-        };
+        return Recurrence.OccursOn(Start, Repeat, date);
     }
 }
 
@@ -93,6 +87,7 @@ public sealed class PlannerState
 {
     public DateOnly? LastRolloverWeek { get; set; }
     public List<PlannerTask> Tasks { get; set; } = [];
+    public List<TaskSeries> TaskSeries { get; set; } = [];
     public List<Habit> Habits { get; set; } = [];
     public List<HabitCheck> HabitChecks { get; set; } = [];
     public List<Payment> Payments { get; set; } = [];

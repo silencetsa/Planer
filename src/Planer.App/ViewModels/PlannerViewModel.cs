@@ -7,7 +7,7 @@ namespace Planer_App.ViewModels;
 
 public enum PlannerScreen { Week, Month, Year, Habits, Payments }
 public sealed record TaskLocation(DateOnly? Date, DayPart Part = DayPart.Evening);
-public sealed record TaskEditRequest(Guid? Id, string Description, bool Important, bool Urgent, TaskLocation Location);
+public sealed record TaskEditRequest(Guid? Id, string Description, bool Important, bool Urgent, TaskLocation Location, Repeat Repeat = Repeat.None);
 public sealed record TaskMove(Guid Id, DateOnly? Date, DayPart? Part = null);
 public sealed record HabitToggle(Guid Id, DateOnly Date);
 public sealed record PaymentToggle(Guid Id, DateOnly Date);
@@ -53,6 +53,8 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
     public int YearMode { get; set; }
     public bool ShowCompletedPayments { get; set; }
     public event EventHandler<TaskEditRequest>? TaskEditorRequested;
+    public event EventHandler<PlannerTask>? TaskDeleteRequested;
+    public event EventHandler<TaskMove>? TaskMoveScopeRequested;
     public event EventHandler<string>? ErrorRequested;
     public event EventHandler? FloatRequested;
     public event EventHandler? HabitEditorRequested;
@@ -93,10 +95,16 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
         ParentCommand = new RelayCommand(() => Navigate(Screen == PlannerScreen.Week ? PlannerScreen.Month : PlannerScreen.Year, SelectedDate));
         ToggleNotesCommand = new RelayCommand(() => { if (Screen == PlannerScreen.Month) _monthNotes = !_monthNotes; else _weekNotes = !_weekNotes; Refresh(); });
         CreateTaskCommand = new RelayCommand<TaskLocation>(location => { if (location is not null) TaskEditorRequested?.Invoke(this, new(null, "", false, false, location)); });
-        EditTaskCommand = new RelayCommand<Guid>(id => { var t = _engine.State.Tasks.FirstOrDefault(t => t.Id == id); if (t is not null) TaskEditorRequested?.Invoke(this, new(id, t.Description, t.Important, t.Urgent, new(t.Date, t.Part))); });
+        EditTaskCommand = new RelayCommand<Guid>(id => { var t = _engine.TaskById(id); if (t is not null) TaskEditorRequested?.Invoke(this, new(id, t.Description, t.Important, t.Urgent, new(t.Date, t.Part), t.Repeat)); });
         ToggleTaskCommand = new RelayCommand<Guid>(id => Run(() => _engine.ToggleTask(id)));
-        DeleteTaskCommand = new RelayCommand<Guid>(id => Run(() => _engine.DeleteTask(id)));
-        MoveTaskCommand = new RelayCommand<TaskMove>(move => { if (move is not null && _engine.State.Tasks.Any(t => t.Id == move.Id)) Run(() => _engine.MoveTask(move.Id, move.Date, move.Part)); });
+        DeleteTaskCommand = new RelayCommand<Guid>(id => { if (_engine.TaskById(id) is { } task) TaskDeleteRequested?.Invoke(this, task); });
+        MoveTaskCommand = new RelayCommand<TaskMove>(move =>
+        {
+            if (move is null || _engine.TaskById(move.Id) is not { } task) return;
+            if (task.Date == move.Date && task.Part == (move.Part ?? (task.Date is null ? DayPart.Evening : task.Part))) return;
+            if (_engine.IsScheduledSeries(move.Id)) TaskMoveScopeRequested?.Invoke(this, move);
+            else MoveTask(move, TaskMoveScope.Occurrence);
+        });
         MoodCommand = new RelayCommand<MoodToggle>(toggle => { if (toggle is not null) Run(() => _engine.ToggleMood(toggle.Date, toggle.Mood)); });
         HabitCommand = new RelayCommand<HabitToggle>(toggle => { if (toggle is not null) Run(() => _engine.ToggleHabit(toggle.Id, toggle.Date)); });
         PaymentCommand = new RelayCommand<PaymentToggle>(toggle => { if (toggle is not null) Run(() => _engine.TogglePayment(toggle.Id, toggle.Date)); });
@@ -124,11 +132,13 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
     public void Refresh() { Revision++; OnPropertyChanged(nameof(Revision)); }
     private void EngineChanged(object? sender, EventArgs args) => Refresh();
     public void Run(Action action) { try { action(); } catch (Exception ex) { ErrorRequested?.Invoke(this, ex.Message); } }
-    public void SaveTask(TaskEditRequest request, string description, bool important, bool urgent) => Run(() =>
+    public void SaveTask(TaskEditRequest request, string description, bool important, bool urgent, Repeat repeat) => Run(() =>
     {
-        if (request.Id is { } id) _engine.EditTask(id, description, important, urgent);
-        else _engine.AddTask(description, important, urgent, request.Location.Date, request.Location.Part);
+        if (request.Id is { } id) _engine.EditTask(id, description, important, urgent, repeat);
+        else _engine.AddTask(description, important, urgent, request.Location.Date, request.Location.Part, repeat);
     });
+    public void DeleteTask(Guid id) => Run(() => _engine.DeleteTask(id));
+    public void MoveTask(TaskMove move, TaskMoveScope scope) => Run(() => _engine.MoveTask(move.Id, move.Date, move.Part, scope));
     public void AddHabit(string name, string color) => Run(() => _engine.AddHabit(name, color));
     public void FinishHabit(Guid id) => Run(() => _engine.FinishHabit(id));
     public void SavePayment(Guid? id, string name, decimal amount, DateOnly start, Repeat repeat, DateOnly? end) => Run(() =>
