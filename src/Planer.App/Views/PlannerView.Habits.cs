@@ -27,7 +27,7 @@ public sealed partial class PlannerView
             bool active = h.Ended is null;
             if (previousGroup != active) { content.Children.Add(Ui.Text(active ? "Активные" : "Завершённые", 18, Ui.Accent, true)); previousGroup = active; }
             var row = new Grid { ColumnSpacing = 20 }; row.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-            Ui.Add(row, Ui.Dot(h.Color, true, 22));
+            Ui.Add(row, Ui.Dot(Palette.HabitColor(h.Color), true, 22));
             var info = new StackPanel { Spacing = 5 }; info.Children.Add(Ui.Text(h.Name, 17, Ui.Ink, true));
             info.Children.Add(Ui.Text($"Создана {h.Created:dd.MM.yyyy}   ·   Активных дней: {h.ActiveDays(_vm.Today)}   ·   Успешных отметок: {_vm.HabitSuccess(h.Id)}", 12, Ui.Muted));
             if (h.Ended is { } ended) info.Children.Add(Ui.Text($"Завершена {ended:dd.MM.yyyy}", 12, Ui.Muted));

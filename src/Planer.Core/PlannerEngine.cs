@@ -114,7 +114,7 @@ public sealed class PlannerEngine
         else State.HabitChecks.Add(new() { HabitId = id, Date = date });
     });
     public IEnumerable<HabitIndicator> HabitsOn(DateOnly date) => State.Habits.Where(h => h.ExistsOn(date))
-        .OrderBy(h => h.Created).ThenBy(h => h.Order).ThenBy(h => h.Id).Select(h => new HabitIndicator(h.Id, h.Name, h.Color,
+        .OrderBy(h => h.Created).ThenBy(h => h.Order).ThenBy(h => h.Id).Select(h => new HabitIndicator(h.Id, h.Name, Palette.HabitColor(h.Color),
             State.HabitChecks.Any(c => c.HabitId == h.Id && c.Date == date)));
 
     public Payment AddPayment(string name, decimal amount, DateOnly start, Repeat repeat, DateOnly? end)

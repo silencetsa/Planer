@@ -168,6 +168,21 @@ Test("Failed persistence rolls in-memory state back", () =>
     var (e, _, store) = Setup(); store.FailSave = true;
     Throws<IOException>(() => e.AddTask("must not survive", false, false, null)); Equal(0, e.State.Tasks.Count);
 });
+Test("Legacy habit colors use the element palette without changing stored history", () =>
+{
+    var (e, clock, store) = Setup();
+    var habit = new Habit { Name = "old habit", Color = "#0DBA30", Created = clock.Today.AddDays(-3), Ended = clock.Today };
+    var state = store.Load(); state.Habits.Add(habit);
+    state.HabitChecks.Add(new() { HabitId = habit.Id, Date = clock.Today.AddDays(-1) }); store.Save(state);
+    e = new PlannerEngine(store, clock);
+    var historical = e.HabitsOn(clock.Today.AddDays(-1)).Single();
+    Equal("#66E37E", historical.Color); Equal(true, historical.Completed);
+    Equal(0, e.HabitsOn(clock.Today).Count());
+    e.SetNote(Dates.WeekKey(clock.Today), "unrelated save");
+    var saved = store.Load(); Equal("#0DBA30", saved.Habits.Single().Color);
+    Equal(habit.Created, saved.Habits.Single().Created); Equal(habit.Ended, saved.Habits.Single().Ended);
+    Equal(clock.Today.AddDays(-1), saved.HabitChecks.Single().Date);
+});
 
 Test("Day layout lends spare space only from empty sections", () =>
 {

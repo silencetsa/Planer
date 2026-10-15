@@ -19,7 +19,7 @@ public sealed partial class PlannerView : UserControl
     private bool _subscribed;
     public PlannerView(PlannerViewModel vm, bool floating = false)
     {
-        _vm = vm; _floating = floating; RequestedTheme = ElementTheme.Light; DataContext = vm;
+        _vm = vm; _floating = floating; RequestedTheme = ElementTheme.Light; DataContext = vm; FontFamily = Ui.PlannerFont;
         Background = Ui.Brush(Ui.Paper); Content = _root;
         Loaded += (_, _) => { Subscribe(); Render(); }; Unloaded += (_, _) => Unsubscribe();
     }
@@ -57,23 +57,23 @@ public sealed partial class PlannerView : UserControl
         menu.Items.Add(new MenuFlyoutItem { Text = "Привычки", Command = _vm.NavigateCommand, CommandParameter = PlannerScreen.Habits, Icon = new FontIcon { Glyph = "\uE73E" } });
         menu.Items.Add(new MenuFlyoutItem { Text = "Платежи", Command = _vm.NavigateCommand, CommandParameter = PlannerScreen.Payments, Icon = new FontIcon { Glyph = "\uE8C7" } });
         settings.Flyout = menu; left.Children.Add(settings);
-        left.Children.Add(Ui.Button(Ui.Icon("\uE76B", 18, "#E7D92B"), _vm.PreviousCommand, tooltip: "Предыдущий период"));
-        var period = Ui.Button(Ui.Text(_vm.Period, 21, Ui.Accent, true), _vm.ParentCommand, tooltip: "Открыть календарь");
+        left.Children.Add(Ui.Button(Ui.PeriodArrow(false), _vm.PreviousCommand, tooltip: "Предыдущий период"));
+        var period = Ui.Button(Ui.Text(_vm.Period, Ui.GoalTitleSize, Ui.Accent, true), _vm.ParentCommand, tooltip: "Открыть календарь");
         period.Background = Ui.Brush("#F3E3FA"); period.Padding = new(12, 7, 12, 7); left.Children.Add(period);
-        left.Children.Add(Ui.Button(Ui.Icon("\uE76C", 18, "#E7D92B"), _vm.NextCommand, tooltip: "Следующий период"));
+        left.Children.Add(Ui.Button(Ui.PeriodArrow(true), _vm.NextCommand, tooltip: "Следующий период"));
         var today = Ui.Button(Ui.Text("Сегодня", 11, Ui.Muted), _vm.TodayCommand, tooltip: "Текущая неделя"); today.Margin = new(5, 0, 0, 0); left.Children.Add(today);
         Ui.Add(header, left);
         var goals = new StackPanel { Spacing = 6 };
         var goalRow = new Grid { ColumnSpacing = 12 }; goalRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); goalRow.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         string goalName = _vm.Screen switch { PlannerScreen.Month => "Цель месяца", PlannerScreen.Year => "Цель года", _ => "Цель недели" };
-        Ui.Add(goalRow, Ui.Text(goalName, 17, Ui.Accent, true));
-        var editGoal = new TextBox { Text = _vm.Goal, PlaceholderText = goalName, BorderThickness = new(0), Background = Ui.Brush("#FFFFFF"), CornerRadius = new(5), FontSize = 13, Foreground = Ui.Brush(Ui.Ink), MinHeight = 34 };
+        var goalTitle = Ui.Text(goalName, Ui.GoalTitleSize, Ui.Accent, true); goalTitle.TextLineBounds = TextLineBounds.Tight; Ui.Add(goalRow, goalTitle);
+        var editGoal = new TextBox { Text = _vm.Goal, PlaceholderText = goalName, BorderThickness = new(0), Background = Ui.Brush("#FFFFFF"), CornerRadius = new(5), FontSize = 15, Foreground = Ui.Brush(Ui.Ink), MinHeight = 36, Padding = new(10, 9, 10, 2), VerticalAlignment = VerticalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center };
         editGoal.TextChanged += (_, _) => _vm.Goal = editGoal.Text; Ui.Add(goalRow, editGoal, 1); goals.Children.Add(goalRow);
         var parent = new Grid { ColumnSpacing = 10, Margin = new(100, 0, 0, 0) }; parent.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); parent.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         string parentLabel = _vm.Screen == PlannerScreen.Week ? "Цель месяца" : "Цель года";
-        Ui.Add(parent, Ui.Text(parentLabel, 11, Ui.Accent, true));
-        var parentText = Ui.Text(string.IsNullOrEmpty(_vm.ParentGoal) ? (_vm.Screen == PlannerScreen.Week ? "Задаётся в планере месяца" : "Задаётся в планере года") : _vm.ParentGoal, 11, "#AA8800");
-        Ui.Add(parent, new Border { Background = Ui.Brush("#FDFBD6"), CornerRadius = new(3), Padding = new(9, 4, 9, 4), Child = parentText }, 1);
+        var parentTitle = Ui.Text(parentLabel, 15, Ui.Accent, true); parentTitle.TextLineBounds = TextLineBounds.Tight; Ui.Add(parent, parentTitle);
+        var parentText = Ui.Text(string.IsNullOrEmpty(_vm.ParentGoal) ? (_vm.Screen == PlannerScreen.Week ? "Задаётся в планере месяца" : "Задаётся в планере года") : _vm.ParentGoal, 13, "#AA8800");
+        Ui.Add(parent, new Border { Background = Ui.Brush("#FDFBD6"), CornerRadius = new(3), Padding = new(9, 4, 9, 4), Child = parentText, VerticalAlignment = VerticalAlignment.Center }, 1);
         if (_vm.Screen != PlannerScreen.Year) goals.Children.Add(parent); Ui.Add(header, goals, 1); return header;
     }
     private UIElement WeekBoard()
@@ -88,37 +88,41 @@ public sealed partial class PlannerView : UserControl
         var inner = new Grid { RowSpacing = 4 }; inner.RowDefinitions.Add(new() { Height = GridLength.Auto });
         inner.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) }); inner.RowDefinitions.Add(new() { Height = GridLength.Auto });
         var top = new Grid(); top.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); top.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
-        var label = Ui.Text($"{date.ToString("ddd", PlannerViewModel.Russian).ToUpperInvariant()} {date.Day}", 11, Ui.Muted, true); label.Margin = new(0, 0, 5, 0); Ui.Add(top, label);
-        var moods = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Right };
+        var label = Ui.Text(date.ToString("ddd", PlannerViewModel.Russian).ToUpperInvariant(), 15, Ui.Muted, true); label.Margin = new(0, 0, 4, 0); Ui.Add(top, label);
+        var moods = Ui.Grid(5, gap: 0);
         string[] names = ["Радость", "Хорошо", "Злость", "Грусть", "Нейтрально"];
         foreach (var mood in Enum.GetValues<Mood>())
         {
             var button = Ui.Button(Ui.MoodIcon(mood, _vm.MoodOn(date) == mood), _vm.MoodCommand, new MoodToggle(date, mood), names[(int)mood]);
-            button.Padding = new(0); button.Width = 24; button.Height = 26; moods.Children.Add(button);
+            button.Padding = new(0); button.Height = 29; button.HorizontalAlignment = HorizontalAlignment.Stretch; Ui.Add(moods, button, (int)mood);
         }
         Ui.Add(top, moods, 1); Ui.Add(inner, top);
         var sections = new DaySectionsPanel(Enum.GetValues<DayPart>().Select(part =>
             _vm.TasksOn(date, part).Count > 0 || (part == DayPart.Morning && _vm.PaymentsOn(date).Count > 0)).ToArray());
         foreach (var part in Enum.GetValues<DayPart>()) sections.Children.Add(DaySection(date, part));
         Ui.Add(inner, sections, row: 1); Ui.Add(inner, HabitDots(date), row: 2);
-        var card = Ui.Card(inner); card.BorderThickness = new(date == _vm.Today ? 3 : 0); card.BorderBrush = Ui.Brush("#FAF03D");
+        var card = Ui.Card(inner); card.BorderThickness = new(date == _vm.Today ? 4 : 0); card.BorderBrush = Ui.Brush("#FAF03D");
+        if (date == _vm.Today) card.CornerRadius = new(17, 0, 17, 17);
         if (date != _vm.Today || floating) return card;
         var outer = new Grid(); outer.Children.Add(card);
-        var pin = Ui.Button(Ui.Text("↗", 15, "#FFFFFF", true), _vm.FloatCommand, tooltip: "Текущий день поверх всех окон");
-        pin.Background = Ui.Brush("#E9E12A"); pin.Width = 24; pin.Height = 23; pin.Padding = new(0); pin.HorizontalAlignment = HorizontalAlignment.Right;
-        pin.VerticalAlignment = VerticalAlignment.Top; pin.CornerRadius = new(0, 15, 0, 8); outer.Children.Add(pin); inner.Margin = new(0, 7, 0, 0); return outer;
+        var pin = Ui.Button(Ui.OriginalIcon("WhiteAccent.png", 21), _vm.FloatCommand, tooltip: "Текущий день поверх всех окон");
+        pin.Background = Ui.Brush("#FAF03D"); pin.Width = 26; pin.Height = 24; pin.Padding = new(2, 0, 0, 2); pin.HorizontalAlignment = HorizontalAlignment.Right;
+        pin.VerticalAlignment = VerticalAlignment.Top; pin.CornerRadius = new(0, 0, 0, 9); outer.Children.Add(pin); return outer;
     }
     private UIElement DaySection(DateOnly date, DayPart part)
     {
-        var layout = new Grid();
-        var content = new StackPanel { Spacing = 4 }; content.Children.Add(Ui.PartIcon(part));
+        var layout = new Grid { ColumnSpacing = 6 };
+        layout.ColumnDefinitions.Add(new() { Width = new(17) }); layout.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
+        var icon = Ui.PartIcon(part); icon.VerticalAlignment = VerticalAlignment.Top; icon.Margin = new(0, 2, 0, 0); Ui.Add(layout, icon);
+        var content = new StackPanel { Spacing = 4 };
         foreach (var task in _vm.TasksOn(date, part)) content.Children.Add(TaskBlock(task));
         if (part == DayPart.Morning) foreach (var payment in _vm.PaymentsOn(date)) content.Children.Add(PaymentBlock(payment));
-        Ui.Add(layout, Ui.Scroll(content));
+        var taskArea = new Border { Child = Ui.Scroll(content), BorderBrush = Ui.Brush("#F2F2F2"), BorderThickness = new(0, 0, 0, part == DayPart.Evening ? 0 : 1) };
+        Ui.Add(layout, taskArea, 1);
         var plus = Ui.Button(Ui.Icon("\uE710", 13), _vm.CreateTaskCommand, new TaskLocation(date, part), $"Создать задачу: {date:dd.MM}, {PartName(part)}");
         plus.Height = 20; plus.Width = 24; plus.Padding = new(0); plus.HorizontalAlignment = HorizontalAlignment.Right; plus.VerticalAlignment = VerticalAlignment.Top;
-        plus.Opacity = 0; plus.Background = Ui.Brush("#F5F5F5"); Ui.Add(layout, plus);
-        var border = new Border { Child = layout, Background = Ui.Brush("#00FFFFFF"), BorderBrush = Ui.Brush("#F2F2F2"), BorderThickness = new(0, 0, 0, part == DayPart.Evening ? 0 : 1), Padding = new(0, 5, 0, 3) };
+        plus.Opacity = 0; plus.Background = Ui.Brush("#F5F5F5"); Ui.Add(layout, plus, 1);
+        var border = new Border { Child = layout, Background = Ui.Brush("#00FFFFFF"), MinHeight = 28, Padding = new(0, 5, 0, 3) };
         border.PointerEntered += (_, _) => plus.Opacity = 1; border.PointerExited += (_, _) => plus.Opacity = 0;
         border.GotFocus += (_, _) => plus.Opacity = 1; border.LostFocus += (_, _) => plus.Opacity = 0;
         EnableDrop(border, date, part); return border;
@@ -126,10 +130,13 @@ public sealed partial class PlannerView : UserControl
     private static string PartName(DayPart part) => part switch { DayPart.Morning => "утро", DayPart.Afternoon => "день", _ => "вечер" };
     private UIElement TaskBlock(PlannerTask task, bool compact = false)
     {
-        var text = Ui.Text(task.Description, compact ? 10.5 : 12, Palette.TaskForegrounds[(int)task.Kind]);
+        var text = Ui.Text(task.Description, compact ? 12.5 : 14, Palette.TaskForegrounds[(int)task.Kind]);
         text.MaxLines = compact ? 1 : 2; text.TextTrimming = TextTrimming.CharacterEllipsis; text.Margin = new(0, 0, task.Completed ? 14 : 0, 0); if (task.Completed) text.Opacity = .48;
         var contents = new Grid(); contents.Children.Add(text);
-        if (task.Completed) contents.Children.Add(new Image { Source = new BitmapImage(new Uri("ms-appx:///Assets/Originals/Completed.png")), Width = 16, Height = 16, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top });
+        if (task.Completed)
+        {
+            var check = Ui.OriginalIcon("Completed.png", 16); check.HorizontalAlignment = HorizontalAlignment.Right; check.VerticalAlignment = VerticalAlignment.Top; contents.Children.Add(check);
+        }
         var button = new DragTaskButton { Content = contents }; button.Padding = new(7, compact ? 3 : 5, 7, compact ? 3 : 5);
         ToolTipService.SetToolTip(button, task.Description); Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, task.Description);
         button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
@@ -150,9 +157,9 @@ public sealed partial class PlannerView : UserControl
     private UIElement PaymentBlock(PaymentOccurrence payment, bool compact = false)
     {
         var layout = new Grid { ColumnSpacing = 5 }; layout.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); layout.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); layout.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        Ui.Add(layout, Ui.Text(payment.Completed ? "✓" : "✪", 14, payment.Completed ? "#FFFFFF" : "#FAF03D"));
-        var title = Ui.Text(payment.Name, compact ? 10 : 11, "#FFFFFF", true); title.MaxLines = 1; title.TextTrimming = TextTrimming.CharacterEllipsis; Ui.Add(layout, title, 1);
-        Ui.Add(layout, Ui.Text(FormatAmount(payment.Amount), compact ? 10 : 11, "#FAF03D", true), 2);
+        Ui.Add(layout, Ui.OriginalIcon(payment.Completed ? "Completed.png" : "YellowAccent.png", 18));
+        var title = Ui.Text(payment.Name, compact ? 12 : 13, "#FFFFFF", true); title.MaxLines = 1; title.TextTrimming = TextTrimming.CharacterEllipsis; Ui.Add(layout, title, 1);
+        Ui.Add(layout, Ui.Text(FormatAmount(payment.Amount), compact ? 12 : 13, "#FAF03D", true), 2);
         var button = Ui.Button(layout, _vm.PaymentCommand, new PaymentToggle(payment.PaymentId, payment.Date), $"{payment.Name}: {payment.Amount:N2} ₽ — отметить оплату");
         button.Background = Ui.Brush(payment.Completed ? "#E4CAED" : Ui.Accent); button.Padding = new(5, 3, 5, 3); button.HorizontalAlignment = HorizontalAlignment.Stretch;
         button.HorizontalContentAlignment = HorizontalAlignment.Stretch; button.CornerRadius = new(4); if (payment.Completed) layout.Opacity = .6; return button;
@@ -163,16 +170,16 @@ public sealed partial class PlannerView : UserControl
         for (int i = 0; i < habits.Count; i++)
         {
             var h = habits[i]; var stack = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
-            if (!compact) { var name = Ui.Text(h.Name, 9, Ui.Muted); name.TextTrimming = TextTrimming.CharacterEllipsis; name.MaxLines = 1; stack.Children.Add(name); }
-            stack.Children.Add(Ui.Dot(h.Color, h.Completed, compact ? 7 : 14));
+            if (!compact) { var name = Ui.Text(h.Name, 11, Ui.Muted); name.TextTrimming = TextTrimming.CharacterEllipsis; name.MaxLines = 1; stack.Children.Add(name); }
+            stack.Children.Add(Ui.Dot(h.Color, h.Completed, compact ? 7 : 20));
             var button = Ui.Button(stack, _vm.HabitCommand, new HabitToggle(h.HabitId, date), h.Name); button.Padding = new(compact ? 1 : 2); button.HorizontalAlignment = HorizontalAlignment.Stretch; Ui.Add(row, button, i);
         }
-        row.MinHeight = compact ? 12 : 35; return row;
+        row.MinHeight = compact ? 12 : 43; return row;
     }
     private UIElement BacklogCard()
     {
         var layout = new Grid { RowSpacing = 12 }; layout.RowDefinitions.Add(new() { Height = GridLength.Auto }); layout.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) }); layout.RowDefinitions.Add(new() { Height = new(23) });
-        var title = Ui.Text("НУЖНО РАСПРЕДЕЛИТЬ", 11, Ui.Muted, true); title.HorizontalAlignment = HorizontalAlignment.Center; Ui.Add(layout, title);
+        var title = Ui.Text("НУЖНО РАСПРЕДЕЛИТЬ", 15, Ui.Muted, true); title.HorizontalAlignment = HorizontalAlignment.Center; Ui.Add(layout, title);
         int columns = _vm.Screen == PlannerScreen.Month ? 1 : 2;
         var tasks = Ui.Grid(columns, gap: 8); tasks.RowDefinitions.Clear(); int rowCount = (_vm.Backlog.Count + columns - 1) / columns;
         for (int i = 0; i < rowCount; i++) tasks.RowDefinitions.Add(new() { Height = GridLength.Auto });
@@ -186,7 +193,7 @@ public sealed partial class PlannerView : UserControl
     private UIElement MatrixCard()
     {
         var layout = new Grid { RowSpacing = 12 }; layout.RowDefinitions.Add(new() { Height = GridLength.Auto }); layout.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
-        var title = Ui.Button(Ui.Text(_vm.NotesVisible ? "ЗАМЕТКИ" : "МАТРИЦА", 11, Ui.Muted, true), _vm.ToggleNotesCommand, tooltip: "Переключить матрицу и заметки");
+        var title = Ui.Button(Ui.Text(_vm.NotesVisible ? "ЗАМЕТКИ" : "МАТРИЦА", 15, Ui.Muted, true), _vm.ToggleNotesCommand, tooltip: "Переключить матрицу и заметки");
         title.HorizontalAlignment = HorizontalAlignment.Center; title.Padding = new(0); Ui.Add(layout, title);
         if (_vm.NotesVisible)
         {
@@ -196,25 +203,26 @@ public sealed partial class PlannerView : UserControl
         }
         else
         {
-            var stack = new StackPanel { Spacing = 20, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var cross = Ui.Grid(3, 3, 0); cross.Width = 150; cross.Height = 150; cross.ColumnDefinitions[1].Width = new(1); cross.RowDefinitions[1].Height = new(1);
+            const double scale = 1.1;
+            var stack = new StackPanel { Spacing = 20 * scale, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var cross = Ui.Grid(3, 3, 0); cross.Width = 150 * scale; cross.Height = 150 * scale; cross.ColumnDefinitions[1].Width = new(scale); cross.RowDefinitions[1].Height = new(scale);
             var vertical = new Border { Background = Ui.Brush("#F1F1F1") }; Grid.SetRowSpan(vertical, 3); Ui.Add(cross, vertical, 1);
             Ui.Add(cross, new Border { Background = Ui.Brush("#F1F1F1") }, 0, 1, 3);
             var counts = _vm.Matrix; int[] positions = [0, 2, 1, 3];
             string[] descriptions = ["Срочное важное", "Срочное неважное", "Несрочное важное", "Несрочное неважное"];
             for (int i = 0; i < 4; i++)
             {
-                var number = Ui.Text(counts.Scheduled[i].ToString(), 21, Palette.TaskForegrounds[i]); number.HorizontalAlignment = HorizontalAlignment.Center;
-                var pill = new Border { Background = Ui.Brush(Palette.TaskBackgrounds[i]), CornerRadius = new(7), Width = 43, Height = 43, Child = number }; ToolTipService.SetToolTip(pill, descriptions[i]);
+                var number = Ui.Text(counts.Scheduled[i].ToString(), 21 * scale, Palette.TaskForegrounds[i]); number.HorizontalAlignment = HorizontalAlignment.Center;
+                var pill = new Border { Background = Ui.Brush(Palette.TaskBackgrounds[i]), CornerRadius = new(7 * scale), Width = 43 * scale, Height = 43 * scale, Child = number }; ToolTipService.SetToolTip(pill, descriptions[i]);
                 Ui.Add(cross, pill, (positions[i] % 2) * 2, (positions[i] / 2) * 2);
             }
             stack.Children.Add(cross);
-            var backlog = new StackPanel { Spacing = 6 }; var caption = Ui.Text("Без времени", 10, Ui.Muted); caption.HorizontalAlignment = HorizontalAlignment.Center; backlog.Children.Add(caption);
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
+            var backlog = new StackPanel { Spacing = 6 * scale }; var caption = Ui.Text("Без времени", 12 * scale, Ui.Muted); caption.HorizontalAlignment = HorizontalAlignment.Center; backlog.Children.Add(caption);
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 * scale, HorizontalAlignment = HorizontalAlignment.Center };
             for (int i = 0; i < 4; i++)
             {
-                var number = Ui.Text(counts.Unscheduled[i].ToString(), 11, Palette.TaskForegrounds[i]); number.HorizontalAlignment = HorizontalAlignment.Center;
-                row.Children.Add(new Border { Background = Ui.Brush(Palette.TaskBackgrounds[i]), CornerRadius = new(3), Width = 23, Height = 23, Child = number });
+                var number = Ui.Text(counts.Unscheduled[i].ToString(), 11 * scale, Palette.TaskForegrounds[i]); number.HorizontalAlignment = HorizontalAlignment.Center;
+                row.Children.Add(new Border { Background = Ui.Brush(Palette.TaskBackgrounds[i]), CornerRadius = new(3 * scale), Width = 23 * scale, Height = 23 * scale, Child = number });
             }
             backlog.Children.Add(row); stack.Children.Add(backlog); Ui.Add(layout, stack, row: 1);
         }

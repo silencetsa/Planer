@@ -1,7 +1,7 @@
 <Window x:Class="Planer_App.TodayWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Сегодня">
   <Grid RequestedTheme="Light" Background="#F5F5F5">
     <Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-    <TitleBar x:Name="DayTitleBar" Title="Сегодня" Background="#F5F5F5" Foreground="#99908C" />
+    <TitleBar x:Name="DayTitleBar" Title="Сегодня" FontFamily="{StaticResource ContentControlThemeFontFamily}" Background="#F5F5F5" Foreground="#99908C" />
     <Grid x:Name="DaySurface" Grid.Row="1" Background="#F5F5F5" />
   </Grid>
 </Window>

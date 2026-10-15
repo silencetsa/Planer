@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using Planer.Core;
 using Windows.UI;
@@ -12,11 +13,18 @@ namespace Planer_App.Views;
 
 public class HandButton : Button
 {
-    public HandButton() => ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);
+    public HandButton()
+    {
+        ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);
+        FontFamily = Ui.PlannerFont;
+    }
 }
 public static class Ui
 {
     public const string Accent = "#C780E8", Muted = "#99908C", Ink = "#55504E", Paper = "#F5F5F5";
+    public const double GoalTitleSize = 21;
+    public static FontFamily PlannerFont { get; } = new("ms-appx:///Assets/Fonts/helvetica_regular.otf#Helvetica");
+    public static FontFamily PlannerFontBold { get; } = new("ms-appx:///Assets/Fonts/helvetica_bold.otf#Helvetica");
     public static SolidColorBrush Brush(string hex)
     {
         hex = hex.TrimStart('#'); byte a = 255;
@@ -25,7 +33,7 @@ public static class Ui
     }
     public static TextBlock Text(string value, double size = 13, string color = Ink, bool bold = false) => new()
     {
-        Text = value, FontSize = size, Foreground = Brush(color), FontWeight = bold ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+        Text = value, FontFamily = bold ? PlannerFontBold : PlannerFont, FontSize = size, Foreground = Brush(color), FontWeight = bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
         VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap
     };
     public static HandButton Button(object content, ICommand? command = null, object? parameter = null, string? tooltip = null)
@@ -56,36 +64,29 @@ public static class Ui
     public static Ellipse Dot(string color, bool filled, double size = 14) => new() { Width = size, Height = size, Fill = Brush(filled ? color : "#00FFFFFF"), Stroke = Brush(color), StrokeThickness = 1.3 };
     private static Microsoft.UI.Xaml.Shapes.Path StrokePath(string data, string color, double thickness = 1.6) => (Microsoft.UI.Xaml.Shapes.Path)XamlReader.Load(
         $"<Path xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' Data='{data}' Stroke='{color}' StrokeThickness='{thickness.ToString(System.Globalization.CultureInfo.InvariantCulture)}' StrokeStartLineCap='Round' StrokeEndLineCap='Round' />");
-    public static Canvas MoodIcon(Mood mood, bool selected, double size = 23)
+    private static readonly string[] MoodOutlineImages = ["GreenPanel.png", "YellowPanelSoft.png", "RedPanel.png", "BluePanel.png", "PurplePanelWarm.png"];
+    private static readonly string[] MoodSelectedImages = ["GreenAccent.png", "YellowPanel.png", "RedAccent.png", "BlueAccent.png", "PurplePanel.png"];
+    internal sealed record OriginalImageLoad(string Name, Task Ready);
+    public static Image OriginalIcon(string name, double size)
     {
-        var color = Palette.MoodColors[(int)mood]; var line = selected ? "#FFFFFF" : color;
-        var canvas = new Canvas { Width = 23, Height = 23 };
-        canvas.Children.Add(new Ellipse { Width = 20, Height = 20, Margin = new(1.5), Stroke = Brush(color), StrokeThickness = 1.7, Fill = Brush(selected ? color : "#00FFFFFF") });
-        if (mood == Mood.Angry) canvas.Children.Add(StrokePath("M 5,7 L 8,9 M 15,9 L 18,7 M 6,16 Q 11.5,11 17,16", line));
-        else
-        {
-            foreach (double x in new[] { 6.7, 14.1 })
-            {
-                var eye = new Ellipse { Width = 2.2, Height = 2.2, Fill = Brush(line) }; Canvas.SetLeft(eye, x); Canvas.SetTop(eye, 7.1); canvas.Children.Add(eye);
-            }
-            canvas.Children.Add(StrokePath(mood switch
-            {
-                Mood.Happy => "M 5.5,12.5 Q 11.5,22 17.5,12.5 Z M 6,13 L 17,13", Mood.Good => "M 6,13 Q 11.5,20 17,13",
-                Mood.Sad => "M 6,16 Q 11.5,10 17,16", _ => "M 7,15 L 16,15"
-            }, line));
-        }
-        if (size != 23) { canvas.RenderTransform = new ScaleTransform { ScaleX = size / 23, ScaleY = size / 23 }; canvas.Width = size; canvas.Height = size; }
-        return canvas;
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var image = new Image { Width = size, Height = size, Stretch = Stretch.Uniform, IsHitTestVisible = false,
+            Tag = new OriginalImageLoad(name, ready.Task) };
+        image.ImageOpened += (_, _) => ready.TrySetResult();
+        image.ImageFailed += (_, e) => ready.TrySetException(new InvalidOperationException($"Не загрузилась иконка {name}: {e.ErrorMessage}"));
+        image.Source = new BitmapImage(new Uri("ms-appx:///Assets/Originals/" + name));
+        return image;
     }
-    public static Canvas PartIcon(DayPart part)
+    public static Image MoodIcon(Mood mood, bool selected, double size = 27) =>
+        OriginalIcon((selected ? MoodSelectedImages : MoodOutlineImages)[(int)mood], size);
+    public static Image PartIcon(DayPart part) => OriginalIcon(part switch
     {
-        var c = new Canvas { Width = 17, Height = 17, Opacity = .65, HorizontalAlignment = HorizontalAlignment.Left };
-        c.Children.Add(StrokePath(part switch
-        {
-            DayPart.Morning => "M 3,10 C 3,2 14,2 14,10 M 1,11 L 16,11 M 4,14 L 13,14",
-            DayPart.Afternoon => "M 11,5 A 4,4 0 1 1 5,11 A 4,4 0 0 1 11,5 M 8.5,0 L 8.5,2 M 8.5,15 L 8.5,17 M 0,8.5 L 2,8.5 M 15,8.5 L 17,8.5 M 2,2 L 3.5,3.5 M 13.5,13.5 L 15,15 M 2,15 L 3.5,13.5 M 13.5,3.5 L 15,2",
-            _ => "M 6,2 C 1,5 2,14 10,14 C 13,14 15,12 16,9 C 7,12 4,6 6,2 Z"
-        }, Muted, 1.4));
-        return c;
+        DayPart.Morning => "GrayPanelAlt.png", DayPart.Afternoon => "GrayPanel.png", _ => "GrayAccent.png"
+    }, 17);
+    public static Canvas PeriodArrow(bool forward)
+    {
+        var canvas = new Canvas { Width = 24, Height = 24 };
+        canvas.Children.Add(StrokePath(forward ? "M 8,4 L 16,12 L 8,20" : "M 16,4 L 8,12 L 16,20", "#E7D92B", 3));
+        return canvas;
     }
 }

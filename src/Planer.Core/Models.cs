@@ -104,8 +104,16 @@ public sealed class PlannerState
 
 public static class Palette
 {
-    public static readonly string[] Elements = ["#CC0A00", "#FF7C05", "#FFAA00", "#0DBA30", "#00ADA2", "#0B7ADA", "#9D94FF", "#C780E8", "#99908C"];
-    public static readonly string[] MoodColors = ["#00E184", "#FFD600", "#FF6961", "#08CAD1", "#C780E8"];
+    public static readonly string[] Elements = ["#FF6961", "#FFB480", "#FAF03D", "#66E37E", "#08CAD1", "#59ADF6", "#9D94FF", "#C780E8"];
+    // Older databases used the text palette. Resolve its six darker colors for display
+    // without rewriting habits, activation dates or historical check marks.
+    public static string HabitColor(string storedColor) => storedColor.ToUpperInvariant() switch
+    {
+        "#CC0A00" => Elements[0], "#FF7C05" => Elements[1], "#FFAA00" => Elements[2],
+        "#0DBA30" => Elements[3], "#00ADA2" => Elements[4], "#0B7ADA" => Elements[5],
+        _ => storedColor
+    };
+    public static readonly string[] MoodColors = ["#66E37E", "#F7EF51", "#FF6961", "#56AAF9", "#C780E8"];
     public static readonly string[] TaskBackgrounds = ["#FFDFDD", "#FDFBD6", "#E0F8E5", "#DBEEFD"];
     public static readonly string[] TaskForegrounds = ["#BD3026", "#A66A00", "#238A3C", "#2774AD"];
 }
