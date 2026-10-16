@@ -33,6 +33,7 @@ public sealed partial class PlannerView
             Ui.Add(row, Ui.Dot(Palette.HabitColor(h.Color), true, 22));
             var info = new StackPanel { Spacing = 5 }; info.Children.Add(Ui.Text(h.Name, 19, Ui.Ink, light: true));
             info.Children.Add(Ui.Text($"Создана {h.Created:dd.MM.yyyy}   ·   Активных дней: {h.ActiveDays(_vm.Today)}   ·   Успешных отметок: {_vm.HabitSuccess(h.Id)}", 14, Ui.Muted));
+            info.Children.Add(Ui.Text($"{(active ? "Текущая серия" : "Серия при завершении")}: {_vm.HabitStreak(h.Id)} дн. подряд", 14, Ui.Muted));
             if (h.Ended is { } ended) info.Children.Add(Ui.Text($"Завершена {ended:dd.MM.yyyy}", 14, Ui.Muted));
             Ui.Add(row, info, 1);
             if (active)

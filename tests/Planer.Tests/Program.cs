@@ -427,6 +427,37 @@ Test("Pixel thresholds scale with DPI while day widths remain per target", () =>
     Equal<int?>(null, snap.Update(new(400, 110.01), slots, 10, 30));
 });
 
+Test("Habit streak keeps yesterday's run until midnight and resets after a missed full day", () =>
+{
+    var (e, clock, _) = Setup(new(2026, 10, 1)); var habit = e.AddHabit("Прогулка", Palette.Elements[3]);
+    for (int i = 0; i < 14; i++) { e.ToggleHabit(habit.Id, clock.Today); clock.Today = clock.Today.AddDays(1); }
+    Equal(14, e.HabitStreak(habit.Id).Days); Equal<DateOnly?>(new(2026, 10, 1), e.HabitStreak(habit.Id).Start);
+    clock.Today = clock.Today.AddDays(1); Equal(0, e.HabitStreak(habit.Id).Days);
+    e.ToggleHabit(habit.Id, clock.Today); Equal(1, e.HabitStreak(habit.Id).Days);
+});
+Test("Habit streak handles undo, backfilling a gap, future checks and separate habits", () =>
+{
+    var (e, clock, _) = Setup(new(2026, 10, 1)); var h = e.AddHabit("Первая", Palette.Elements[0]); var second = e.AddHabit("Вторая", Palette.Elements[1]);
+    for (int i = 0; i < 5; i++) if (i != 2) e.ToggleHabit(h.Id, new(2026, 10, i + 1));
+    clock.Today = new(2026, 10, 5); Equal(2, e.HabitStreak(h.Id).Days); Equal(0, e.HabitStreak(second.Id).Days);
+    e.ToggleHabit(h.Id, new(2026, 10, 3)); Equal(5, e.HabitStreak(h.Id).Days);
+    e.ToggleHabit(h.Id, clock.Today); Equal(4, e.HabitStreak(h.Id).Days);
+    e.ToggleHabit(h.Id, clock.Today.AddDays(1)); Equal(4, e.HabitStreak(h.Id).Days);
+});
+Test("Finishing a habit retains its final streak through SQLite restart", () =>
+{
+    var folder = Path.Combine(Path.GetTempPath(), "Planer-test-" + Guid.NewGuid()); Directory.CreateDirectory(folder);
+    try
+    {
+        var clock = new TestClock { Today = new(2026, 10, 1) }; var store = new SqlitePlannerStore(Path.Combine(folder, "planner.db"));
+        var e = new PlannerEngine(store, clock); var h = e.AddHabit("Читать", Palette.Elements[5]);
+        e.ToggleHabit(h.Id, clock.Today); clock.Today = clock.Today.AddDays(1); e.ToggleHabit(h.Id, clock.Today);
+        clock.Today = clock.Today.AddDays(1); e.FinishHabit(h.Id); clock.Today = clock.Today.AddMonths(1);
+        e = new PlannerEngine(store, clock); Equal(2, e.HabitStreak(h.Id).Days); Equal(2, e.State.HabitChecks.Count);
+    }
+    finally { Directory.Delete(folder, true); }
+});
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;
 

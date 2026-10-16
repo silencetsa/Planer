@@ -152,6 +152,7 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
     public IReadOnlyList<PaymentOccurrence> PaymentsOn(DateOnly date) => _engine.PaymentsOn(date).ToList();
     public Mood? MoodOn(DateOnly date) => _engine.MoodOn(date);
     public int HabitSuccess(Guid id) => _engine.State.HabitChecks.Count(c => c.HabitId == id);
+    public int HabitStreak(Guid id) => _engine.HabitStreak(id).Days;
     public PaymentRevision? PaymentRevision(Payment p) => p.RevisionOn(Today);
     public void Dispose() => _engine.Changed -= EngineChanged;
 }
