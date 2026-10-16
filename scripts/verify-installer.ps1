@@ -1,7 +1,7 @@
 param([string]$Installer = '')
 $ErrorActionPreference = 'Stop'
 $planerRoot = Split-Path -Parent $PSScriptRoot
-if (!$Installer) { $Installer = Join-Path $planerRoot 'dist\Planer-1.1.2-win-x64-setup.exe' }
+if (!$Installer) { $Installer = Join-Path $planerRoot 'dist\Planer-1.2.0-win-x64-setup.exe' }
 $Installer = (Resolve-Path -LiteralPath $Installer).Path
 $planerUninstallKeyName = '{A316F590-BB3F-43E1-81C8-861EA1BC03BA}_is1'
 $planerRegistryPaths = @(
