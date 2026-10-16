@@ -34,6 +34,17 @@ public static partial class Ui
         if (hex.Length == 8) { a = Convert.ToByte(hex[..2], 16); hex = hex[2..]; }
         return new(Color.FromArgb(a, Convert.ToByte(hex[..2], 16), Convert.ToByte(hex[2..4], 16), Convert.ToByte(hex[4..6], 16)));
     }
+    public static string WithLightness(string hex, double lightness)
+    {
+        var color = Brush(hex).Color;
+        double[] rgb = [color.R / 255d, color.G / 255d, color.B / 255d];
+        double min = rgb.Min(), max = rgb.Max(), previous = (min + max) / 2;
+        double saturation = max == min ? 0 : (max - min) / (1 - Math.Abs(2 * previous - 1));
+        double chroma = (1 - Math.Abs(2 * lightness - 1)) * saturation;
+        byte Channel(double value) => (byte)Math.Clamp(Math.Round(255 * (lightness - chroma / 2 +
+            (max == min ? 0 : (value - min) / (max - min) * chroma))), 0, 255);
+        return $"#{Channel(rgb[0]):X2}{Channel(rgb[1]):X2}{Channel(rgb[2]):X2}";
+    }
     public static TextBlock Text(string value, double size = 13, string color = Ink, bool bold = false, bool light = false) => new()
     {
         Text = value, FontFamily = bold ? PlannerFontBold : light ? PlannerFontLight : PlannerFont, FontSize = size, Foreground = Brush(color), FontWeight = bold ? Microsoft.UI.Text.FontWeights.Bold : light ? Microsoft.UI.Text.FontWeights.Light : Microsoft.UI.Text.FontWeights.Normal,

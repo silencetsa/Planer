@@ -60,18 +60,19 @@ public static partial class Ui
             PrimaryButtonText = primary, CloseButtonText = close,
             DefaultButton = string.IsNullOrEmpty(primary) || defaultClose ? ContentDialogButton.Close : ContentDialogButton.Primary,
             PrimaryButtonStyle = DialogButtonStyle(Palette.TaskBackgrounds[destructive ? 0 : 2], Palette.TaskForegrounds[destructive ? 0 : 2], scale),
-            CloseButtonStyle = DialogButtonStyle(Palette.TaskBackgrounds[0], Palette.TaskForegrounds[0], scale)
+            CloseButtonStyle = DialogButtonStyle("#FFEEE3", "#FF7C05", scale)
         };
         dialog.Opened += (_, _) => OpenDialogs.Add(dialog);
         dialog.Closed += (_, _) => OpenDialogs.Remove(dialog);
         foreach (string key in new[] { "ContentDialogBackground", "ContentDialogTopOverlay" }) dialog.Resources[key] = Brush(Paper);
         dialog.Resources["ContentDialogSeparatorBorderBrush"] = Brush("#00FFFFFF");
         // WinUI applies AccentButtonStyle to the default action, even when its button style is set.
-        int defaultKind = string.IsNullOrEmpty(primary) || defaultClose || destructive ? 0 : 2;
+        int defaultKind = destructive ? 0 : 2;
+        bool closeIsDefault = string.IsNullOrEmpty(primary) || defaultClose;
         foreach (string suffix in new[] { "", "PointerOver", "Pressed", "Disabled" })
         {
-            dialog.Resources["AccentButtonBackground" + suffix] = Brush(Palette.TaskBackgrounds[defaultKind]);
-            dialog.Resources["AccentButtonForeground" + suffix] = Brush(Palette.TaskForegrounds[defaultKind]);
+            dialog.Resources["AccentButtonBackground" + suffix] = Brush(closeIsDefault ? "#FFEEE3" : Palette.TaskBackgrounds[defaultKind]);
+            dialog.Resources["AccentButtonForeground" + suffix] = Brush(closeIsDefault ? "#FF7C05" : Palette.TaskForegrounds[defaultKind]);
             dialog.Resources["AccentButtonBorderBrush" + suffix] = Brush("#00FFFFFF");
         }
         dialog.Resources["ControlContentThemeFontSize"] = 14d * scale;

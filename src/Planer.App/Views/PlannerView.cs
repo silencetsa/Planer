@@ -150,7 +150,9 @@ public sealed partial class PlannerView : UserControl
         EnableDrop(border, date, part, () => insertion, dayCard);
     }
     private static string PartName(DayPart part) => part switch { DayPart.Morning => "утро", DayPart.Afternoon => "день", _ => "вечер" };
-    private UIElement TaskBlock(PlannerTask task, bool compact = false)
+    private static string TaskBackground(PlannerTask task) => task.Completed
+        ? Ui.WithLightness(Palette.TaskBackgrounds[(int)task.Kind], .96) : Palette.TaskBackgrounds[(int)task.Kind];
+    private static (Grid Contents, TextBlock Text) TaskContents(PlannerTask task, bool compact = false)
     {
         var text = Ui.Text(task.Description, compact ? 12.5 : 14, Palette.TaskForegrounds[(int)task.Kind]);
         text.MaxLines = compact ? 1 : 2; text.TextTrimming = TextTrimming.CharacterEllipsis; text.Margin = new(0, 0, task.Completed ? 14 : 0, 0); if (task.Completed) text.Opacity = .48;
@@ -162,7 +164,12 @@ public sealed partial class PlannerView : UserControl
         var button = new DragTaskButton { Content = contents, SourceTask = task }; button.Padding = new(7, compact ? 3 : 5, 7, compact ? 3 : 5);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, task.Description);
         button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        button.Background = Ui.Brush(Palette.TaskBackgrounds[(int)task.Kind]); button.CornerRadius = new(4);
+        button.Background = Ui.Brush(TaskBackground(task)); button.CornerRadius = new(4);
+        return (contents, text);
+    }
+    private UIElement TaskBlock(PlannerTask task, bool compact = false)
+    {
+        var (contents, text) = TaskContents(task, compact);
         button.Resources["ButtonBackgroundPointerOver"] = button.Background;
         button.Resources["ButtonBackgroundPressed"] = button.Background;
         button.Click += (_, _) => { if (!button.IsClickSuppressed && !_taskDragInProgress && DateTime.UtcNow > _suppressClicksUntil) _vm.ToggleTaskCommand.Execute(task.Id); };
@@ -181,7 +188,7 @@ public sealed partial class PlannerView : UserControl
         var layout = new Grid { ColumnSpacing = 5 }; layout.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); layout.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); layout.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         Ui.Add(layout, Ui.OriginalIcon(payment.Completed ? "Completed.png" : "YellowAccent.png", 18));
         var title = Ui.Text(payment.Name, compact ? 12.5 : 14, "#FFFFFF"); title.MaxLines = 1; title.TextTrimming = TextTrimming.CharacterEllipsis; Ui.Add(layout, title, 1);
-        Ui.Add(layout, Ui.Text(FormatAmount(payment.Amount), compact ? 14.5 : 16, "#FAF03D", true), 2);
+        Ui.Add(layout, Ui.Text(FormatAmount(payment.Amount), compact ? 14.5 : 16, payment.Completed ? "#FFFFFF" : "#FAF03D", true), 2);
         var button = Ui.Button(layout, _vm.PaymentCommand, new PaymentToggle(payment.PaymentId, payment.Date), $"{payment.Name}: {payment.Amount:N2} ₽ — отметить оплату");
         button.Tag = payment;
         button.Background = Ui.Brush(payment.Completed ? "#E4CAED" : Ui.Accent); button.Padding = new(5, 4, 5, 4); button.HorizontalAlignment = HorizontalAlignment.Stretch;

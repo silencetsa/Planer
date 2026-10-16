@@ -36,6 +36,7 @@ $planerCases = @(
     @{ Name='payment-normal'; View='Week'; Scenario='PaymentNormal' },
     @{ Name='payment-hover'; View='Week'; Scenario='PaymentHover' },
     @{ Name='payment-done'; View='Week'; Scenario='PaymentDone'; Separate=$true },
+    @{ Name='completed-task-colors'; View='Week'; Scenario='CompletedTaskColors'; Separate=$true },
     @{ Name='task-dialog'; View='Week'; Scenario='TaskDialog' },
     @{ Name='task-dialog-on'; View='Week'; Scenario='TaskDialogOn' },
     @{ Name='task-dialog-large'; View='Week'; Scenario='TaskDialog'; Large=$true },

@@ -13,7 +13,11 @@ public sealed partial class PlannerView
     {
         if (!OwnsDialogs) return;
         var body = new StackPanel { Spacing = 12, MinWidth = 340 };
-        body.Children.Add(Ui.Text(task.Description, 14));
+        var (contents, text) = TaskContents(task);
+        text.MaxLines = 0; text.TextTrimming = TextTrimming.None;
+        body.Children.Add(new Border { Name = "DeleteTaskPreview", Background = Ui.Brush(TaskBackground(task)),
+            CornerRadius = new(4), Padding = new(7, 5, 7, 5), Child = new ScrollViewer { Content = contents, MaxHeight = 180,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
         body.Children.Add(Ui.Text(task.SeriesId is null ? "Удалить эту задачу?" :
             "Будут удалены эта задача и все следующие задачи в цепочке. Предыдущие задачи и их отметки сохранятся.", 14));
         var dialog = Ui.Dialog(XamlRoot, "Удалить задачу?", body, primary: "Удалить", scale: _scaleHost.ScaleFactor, defaultClose: true, destructive: true);

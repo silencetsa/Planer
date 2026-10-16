@@ -16,6 +16,25 @@ internal static class UiSnapshot
     public static async Task SaveScenarioAsync(FrameworkElement view, string path, string scenario, PlannerViewModel vm)
     {
         await PrepareAsync(view);
+        if (scenario == "CompletedTaskColors")
+        {
+            foreach (TaskKind kind in Enum.GetValues<TaskKind>())
+            {
+                string description = "Выполненная задача: " + kind;
+                var request = new TaskEditRequest(null, description, kind is TaskKind.UrgentImportant or TaskKind.NotUrgentImportant,
+                    kind is TaskKind.UrgentImportant or TaskKind.UrgentUnimportant, new(vm.Today));
+                vm.SaveTask(request, description, request.Important, request.Urgent, Repeat.None);
+                vm.ToggleTaskCommand.Execute(vm.TasksOn(vm.Today).Single(t => t.Description == description).Id);
+            }
+            await PrepareAsync(view);
+            foreach (var card in Descendants<DragTaskButton>(view).Where(b => b.SourceTask?.Completed == true))
+            {
+                var color = ((SolidColorBrush)card.Background).Color;
+                double lightness = (new[] { color.R, color.G, color.B }.Max() + new[] { color.R, color.G, color.B }.Min()) / 510d;
+                if (Math.Abs(lightness - .96) > .002) throw new InvalidOperationException("Фон выполненной задачи должен иметь HSL Lightness 96%");
+            }
+            await SaveAsync(view, path); return;
+        }
         if (scenario is "LayoutStress" or "TodayLayoutStress")
         {
             await CheckLayoutStressAsync(view, path, vm, scenario == "TodayLayoutStress"); return;
@@ -118,6 +137,8 @@ internal static class UiSnapshot
                 var payment = (PaymentOccurrence)paymentButton.Tag;
                 vm.PaymentCommand.Execute(new PaymentToggle(payment.PaymentId, payment.Date)); await PrepareAsync(view);
                 paymentButton = Descendants<Button>(view).First(b => b.Tag is PaymentOccurrence p && p.PaymentId == payment.PaymentId && p.Date == payment.Date);
+                if (Descendants<TextBlock>(paymentButton).Last().Foreground is not SolidColorBrush { Color: { R: 255, G: 255, B: 255 } })
+                    throw new InvalidOperationException("Сумма выполненного платежа должна быть белой");
             }
             else if (scenario == "PaymentHover") VisualStateManager.GoToState(paymentButton, "PointerOver", false);
             await SaveAsync(paymentButton, path); return;
@@ -171,6 +192,13 @@ internal static class UiSnapshot
         if (popupRoot is null || openedDialog is null) throw new InvalidOperationException($"Не загрузилось содержимое формы {scenario}");
         await PrepareAsync(popupRoot);
         if (scenario == "TaskDialogOn") foreach (var toggle in Descendants<PrioritySwitch>(popupRoot)) toggle.IsChecked = true;
+        var cancel = Descendants<Button>(popupRoot).FirstOrDefault(b => b.Content is string s && s == "Отмена");
+        if (cancel is not null && (cancel.Background is not SolidColorBrush { Color: { R: 255, G: 238, B: 227 } }
+            || cancel.Foreground is not SolidColorBrush { Color: { R: 255, G: 124, B: 5 } }))
+            throw new InvalidOperationException("Отмена должна использовать оранжевую палитру");
+        if (scenario is "DeleteTaskDialog" or "DeleteRecurringDialog"
+            && !Descendants<Border>(popupRoot).Any(b => b.Name == "DeleteTaskPreview" && b.Background is SolidColorBrush))
+            throw new InvalidOperationException("В подтверждении удаления отсутствует цветная карточка задачи");
         if (scenario == "TaskMultilineDialog" && NormalizeLines(Descendants<TextBox>((DependencyObject)openedDialog.Content).First().Text) != "Первая строка\nВторая строка")
             throw new InvalidOperationException("Редактор задачи потерял строки описания");
         var chrome = Descendants<Border>(popupRoot).FirstOrDefault(b => b.Name == "BackgroundElement");
