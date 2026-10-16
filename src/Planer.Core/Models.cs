@@ -86,6 +86,9 @@ public sealed record MatrixCounts(int[] Scheduled, int[] Unscheduled);
 public sealed class PlannerState
 {
     public DateOnly? LastRolloverWeek { get; set; }
+    public bool NotificationTrackingInitialized { get; set; }
+    public bool NotificationsEnabled { get; set; } = true;
+    public List<PlannerNotification> Notifications { get; set; } = [];
     public List<PlannerTask> Tasks { get; set; } = [];
     public List<TaskSeries> TaskSeries { get; set; } = [];
     public List<Habit> Habits { get; set; } = [];

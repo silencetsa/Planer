@@ -458,6 +458,89 @@ Test("Finishing a habit retains its final streak through SQLite restart", () =>
     finally { Directory.Delete(folder, true); }
 });
 
+Test("Morning notification is due from 10 inclusive until 12 exclusive, once per date", () =>
+{
+    var (e, clock, store) = Setup(); e.AddTask("Сегодня", false, false, clock.Today);
+    e.CheckNotificationDue(clock.Today.ToDateTime(new(9, 59))); Equal(0, e.State.Notifications.Count);
+    e.CheckNotificationDue(clock.Today.ToDateTime(new(10, 0))); var first = e.PendingNotifications(clock.Today.ToDateTime(new(10, 0))).Single();
+    Equal(PlannerDestination.Today, first.Destination); Equal(PlannerEngine.MorningMessage, first.Body);
+    e.AcknowledgeNotification(first.Key); e = new PlannerEngine(store, clock);
+    e.CheckNotificationDue(clock.Today.ToDateTime(new(11, 59))); Equal(0, e.PendingNotifications(clock.Today.ToDateTime(new(11, 59))).Count);
+    clock.Today = clock.Today.AddDays(1); e.AddTask("Поздно", true, false, clock.Today);
+    e.CheckNotificationDue(clock.Today.ToDateTime(new(12, 0))); Equal(1, e.State.Notifications.Count);
+});
+Test("A late start before noon catches up; backlog and payments alone do not trigger morning", () =>
+{
+    var (e, clock, _) = Setup(); e.AddTask("Без даты", false, false, null); e.AddPayment("Платёж", 100, clock.Today, Repeat.None, null);
+    e.CheckNotificationDue(clock.Today.ToDateTime(new(11, 0))); Equal(0, e.State.Notifications.Count);
+    var task = e.AddTask("Уже выполнено", true, false, clock.Today); e.ToggleTask(task.Id);
+    e.CheckNotificationDue(clock.Today.ToDateTime(new(11, 0))); Equal(1, e.PendingNotifications(clock.Today.ToDateTime(new(11, 0))).Count);
+    e.DeleteTask(task.Id); Equal(0, e.PendingNotifications(clock.Today.ToDateTime(new(11, 0))).Count);
+});
+Test("Rollover notification is durable, requires an actual move, and never repeats in the same week", () =>
+{
+    var (e, clock, store) = Setup(new(2026, 10, 18)); Equal(0, e.State.Notifications.Count);
+    var open = e.AddTask("Просрочено", true, true, clock.Today); var done = e.AddTask("Готово", false, false, clock.Today); e.ToggleTask(done.Id);
+    clock.Today = new(2026, 10, 19); e = new PlannerEngine(store, clock);
+    var notification = e.State.Notifications.Single(n => n.Kind == PlannerNotificationKind.Rollover);
+    Equal(PlannerEngine.RolloverMessage, notification.Body); Equal(PlannerDestination.Week, notification.Destination);
+    Equal<DateOnly?>(null, e.State.Tasks.Single(t => t.Id == open.Id).Date); Equal<DateOnly?>(new(2026, 10, 18), e.State.Tasks.Single(t => t.Id == done.Id).Date);
+    e.AcknowledgeNotification(notification.Key); e = new PlannerEngine(store, clock); e.ReconcileWeek();
+    Equal(1, e.State.Notifications.Count); Equal(0, e.PendingNotifications(clock.Today.ToDateTime(new(9, 0))).Count);
+});
+Test("Habit notifications occur at 14, 30, 60 and 90 consecutive marked dates", () =>
+{
+    var (e, clock, _) = Setup(new(2026, 1, 1)); var h = e.AddHabit("Чтение", Palette.Elements[0]);
+    for (int day = 1; day <= 90; day++)
+    {
+        clock.Today = h.Created.AddDays(day - 1); e.ToggleHabit(h.Id, clock.Today);
+        foreach (var n in e.PendingNotifications(clock.Today.ToDateTime(new(9, 0)))) e.AcknowledgeNotification(n.Key);
+    }
+    Equal("14,30,60,90", string.Join(',', e.State.Notifications.Where(n => n.HabitId == h.Id).Select(n => n.Milestone)));
+    Equal(true, e.State.Notifications.All(n => n.Body.Contains("Чтение") && n.Body.Contains("Ты молодец <3")));
+});
+Test("Undo and redo cannot duplicate a habit toast, while a new run can reach 14 again", () =>
+{
+    var (e, clock, _) = Setup(new(2026, 1, 1)); var h = e.AddHabit("Вода", Palette.Elements[4]);
+    for (int i = 0; i < 14; i++) { clock.Today = h.Created.AddDays(i); e.ToggleHabit(h.Id, clock.Today); }
+    e.ToggleHabit(h.Id, clock.Today); Equal(0, e.PendingNotifications(clock.Today.ToDateTime(new(9, 0))).Count);
+    e.ToggleHabit(h.Id, clock.Today); Equal(1, e.State.Notifications.Count);
+    clock.Today = clock.Today.AddDays(2); var restart = clock.Today;
+    for (int i = 0; i < 14; i++) { clock.Today = restart.AddDays(i); e.ToggleHabit(h.Id, clock.Today); }
+    Equal(2, e.State.Notifications.Count(n => n.HabitId == h.Id && n.Milestone == 14));
+});
+Test("Future habit marks do not award milestones early; old databases receive no retroactive congratulations", () =>
+{
+    var (e, clock, store) = Setup(new(2026, 1, 1)); var h = e.AddHabit("Сон", Palette.Elements[5]);
+    for (int i = 0; i < 30; i++) e.ToggleHabit(h.Id, h.Created.AddDays(i));
+    Equal(0, e.State.Notifications.Count); clock.Today = h.Created.AddDays(13);
+    e.CheckNotificationDue(clock.Today.ToDateTime(new(9, 0))); Equal(14, e.State.Notifications.Single().Milestone);
+    var legacy = store.Load(); legacy.Notifications.Clear(); legacy.NotificationTrackingInitialized = false;
+    clock.Today = h.Created.AddDays(29); store.Save(legacy); e = new PlannerEngine(store, clock);
+    e.CheckNotificationDue(clock.Today.ToDateTime(new(9, 0))); Equal(0, e.PendingNotifications(clock.Today.ToDateTime(new(9, 0))).Count);
+    Equal(2, e.State.Notifications.Count(n => n.HabitId == h.Id && n.Dispatched));
+});
+Test("A failed habit save cannot keep either the check or its queued milestone", () =>
+{
+    var (e, clock, store) = Setup(new(2026, 1, 1)); var h = e.AddHabit("Пешком", Palette.Elements[3]);
+    for (int i = 0; i < 13; i++) { clock.Today = h.Created.AddDays(i); e.ToggleHabit(h.Id, clock.Today); }
+    clock.Today = clock.Today.AddDays(1); store.FailSave = true; Throws<IOException>(() => e.ToggleHabit(h.Id, clock.Today));
+    Equal(13, e.HabitStreak(h.Id).Days); Equal(0, e.State.Notifications.Count);
+});
+Test("SQLite retains notification receipts and disabled preference without changing planner history", () =>
+{
+    var folder = Path.Combine(Path.GetTempPath(), "Planer-test-" + Guid.NewGuid()); Directory.CreateDirectory(folder);
+    try
+    {
+        var clock = new TestClock { Today = new(2026, 10, 17) }; var store = new SqlitePlannerStore(Path.Combine(folder, "planner.db"));
+        var e = new PlannerEngine(store, clock); var t = e.AddTask("Сегодня", true, true, clock.Today);
+        e.CheckNotificationDue(clock.Today.ToDateTime(new(11, 0))); e.AcknowledgeNotification(e.State.Notifications.Single().Key); e.SetNotificationsEnabled(false);
+        e = new PlannerEngine(store, clock); Equal(false, e.State.NotificationsEnabled); Equal(true, e.State.Notifications.Single().Dispatched);
+        Equal(t.Id, e.TasksOn(clock.Today).Single().Id); Equal(0, e.PendingNotifications(clock.Today.ToDateTime(new(11, 0))).Count);
+    }
+    finally { Directory.Delete(folder, true); }
+});
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;
 

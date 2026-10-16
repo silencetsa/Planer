@@ -10,7 +10,7 @@ public sealed class SqlitePlannerStore : IPlannerStore
 {
     public string DatabasePath { get; }
     private readonly string _connectionString;
-    private static readonly string[] Tables = ["tasks", "task_series", "habits", "habit_checks", "payments", "payment_checks", "moods", "goals", "notes", "metadata"];
+    private static readonly string[] Tables = ["tasks", "task_series", "habits", "habit_checks", "payments", "payment_checks", "moods", "goals", "notes", "metadata", "notifications"];
 
     public SqlitePlannerStore(string path)
     {
@@ -19,7 +19,7 @@ public sealed class SqlitePlannerStore : IPlannerStore
         _connectionString = new SqliteConnectionStringBuilder { DataSource = DatabasePath, Pooling = false, DefaultTimeout = 5 }.ToString();
         using var c = Open();
         using var command = c.CreateCommand();
-        command.CommandText = "PRAGMA journal_mode=WAL; PRAGMA user_version=2;" + string.Join("", Tables.Select(t => $"CREATE TABLE IF NOT EXISTS {t}(id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL);"));
+        command.CommandText = "PRAGMA journal_mode=WAL; PRAGMA user_version=3;" + string.Join("", Tables.Select(t => $"CREATE TABLE IF NOT EXISTS {t}(id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL);"));
         command.ExecuteNonQuery();
     }
     private SqliteConnection Open()
@@ -36,13 +36,16 @@ public sealed class SqlitePlannerStore : IPlannerStore
             Tasks = Read<PlannerTask>(c, "tasks"), Habits = Read<Habit>(c, "habits"),
             TaskSeries = Read<TaskSeries>(c, "task_series"),
             HabitChecks = Read<HabitCheck>(c, "habit_checks"), Payments = Read<Payment>(c, "payments"),
-            PaymentChecks = Read<PaymentCheck>(c, "payment_checks")
+            PaymentChecks = Read<PaymentCheck>(c, "payment_checks"), Notifications = Read<PlannerNotification>(c, "notifications")
         };
         foreach (var (key, data) in ReadRows(c, "moods")) s.Moods[DateOnly.ParseExact(key, "yyyy-MM-dd", CultureInfo.InvariantCulture)] = JsonSerializer.Deserialize<Mood>(data);
         foreach (var (key, data) in ReadRows(c, "goals")) s.Goals[key] = JsonSerializer.Deserialize<string>(data)!;
         foreach (var (key, data) in ReadRows(c, "notes")) s.Notes[key] = JsonSerializer.Deserialize<string>(data)!;
         var rollover = ReadRows(c, "metadata").FirstOrDefault(r => r.Key == "last_rollover_week");
         if (rollover.Data is not null) s.LastRolloverWeek = JsonSerializer.Deserialize<DateOnly?>(rollover.Data);
+        var metadata = ReadRows(c, "metadata").ToDictionary(r => r.Key, r => r.Data);
+        s.NotificationTrackingInitialized = metadata.TryGetValue("notification_tracking", out var tracking) && JsonSerializer.Deserialize<bool>(tracking);
+        s.NotificationsEnabled = !metadata.TryGetValue("notifications_enabled", out var enabled) || JsonSerializer.Deserialize<bool>(enabled);
         return s;
     }
     private static List<T> Read<T>(SqliteConnection c, string table) => ReadRows(c, table).Select(r => JsonSerializer.Deserialize<T>(r.Data)!).ToList();
@@ -69,7 +72,9 @@ public sealed class SqlitePlannerStore : IPlannerStore
         Write(c, transaction, "moods", s.Moods.Select(x => ($"{x.Key:yyyy-MM-dd}", JsonSerializer.Serialize(x.Value))));
         Write(c, transaction, "goals", s.Goals.Select(x => (x.Key, JsonSerializer.Serialize(x.Value))));
         Write(c, transaction, "notes", s.Notes.Select(x => (x.Key, JsonSerializer.Serialize(x.Value))));
-        Write(c, transaction, "metadata", [("last_rollover_week", JsonSerializer.Serialize(s.LastRolloverWeek))]);
+        Write(c, transaction, "notifications", s.Notifications.Select(n => (n.Key, JsonSerializer.Serialize(n))));
+        Write(c, transaction, "metadata", [("last_rollover_week", JsonSerializer.Serialize(s.LastRolloverWeek)),
+            ("notification_tracking", JsonSerializer.Serialize(s.NotificationTrackingInitialized)), ("notifications_enabled", JsonSerializer.Serialize(s.NotificationsEnabled))]);
         transaction.Commit();
     }
     private static void Write(SqliteConnection c, SqliteTransaction transaction, string table, IEnumerable<(string Key, string Data)> rows)

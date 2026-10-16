@@ -14,6 +14,7 @@ public sealed partial class PlannerEngine
         _store = store;
         _clock = clock;
         State = store.Load();
+        InitializeNotificationTracking();
         ReconcileWeek();
     }
 
@@ -32,8 +33,10 @@ public sealed partial class PlannerEngine
         {
             // Materialize missed occurrences before rollover, including time spent with the app closed.
             MaterializeTasks(DateOnly.MinValue, week.AddDays(-1));
-            foreach (var task in State.Tasks.Where(t => !t.Completed && t.Date is not null && t.Date < week))
-                task.Date = null;
+            var overdue = State.Tasks.Where(t => !t.Completed && t.Date is not null && t.Date < week).ToList();
+            foreach (var task in overdue) task.Date = null;
+            if (overdue.Count > 0) QueueNotification(new() { Key = $"rollover:{week:yyyy-MM-dd}", Kind = PlannerNotificationKind.Rollover,
+                Destination = PlannerDestination.Week, Created = Today, Body = RolloverMessage });
             State.LastRolloverWeek = week;
         });
         return true;
@@ -126,6 +129,7 @@ public sealed partial class PlannerEngine
         var check = State.HabitChecks.FirstOrDefault(c => c.HabitId == id && c.Date == date);
         if (check is not null) State.HabitChecks.Remove(check);
         else State.HabitChecks.Add(new() { HabitId = id, Date = date });
+        QueueHabitMilestone(habit);
     });
     public IEnumerable<HabitIndicator> HabitsOn(DateOnly date) => State.Habits.Where(h => h.ExistsOn(date))
         .OrderBy(h => h.Created).ThenBy(h => h.Order).ThenBy(h => h.Id).Select(h => new HabitIndicator(h.Id, h.Name, Palette.HabitColor(h.Color),
