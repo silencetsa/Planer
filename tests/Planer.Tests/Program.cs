@@ -541,6 +541,13 @@ Test("SQLite retains notification receipts and disabled preference without chang
     finally { Directory.Delete(folder, true); }
 });
 
+Test("A missed final active day leaves a finished habit with no current streak", () =>
+{
+    var (e, clock, _) = Setup(new(2026, 10, 1)); var habit = e.AddHabit("Серия", Palette.Elements[3]);
+    e.ToggleHabit(habit.Id, clock.Today); clock.Today = clock.Today.AddDays(2); e.FinishHabit(habit.Id);
+    Equal(0, e.HabitStreak(habit.Id).Days); Equal(1, e.State.HabitChecks.Count);
+});
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;
 

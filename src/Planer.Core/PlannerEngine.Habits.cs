@@ -7,11 +7,12 @@ public sealed partial class PlannerEngine
     public HabitStreakInfo HabitStreak(Guid id)
     {
         var habit = State.Habits.First(h => h.Id == id);
-        var end = habit.Ended is { } ended && ended <= Today ? ended.AddDays(-1) : Today;
+        bool finished = habit.Ended is { } ending && ending <= Today;
+        var end = finished ? (habit.Ended!.Value > DateOnly.MinValue ? habit.Ended.Value.AddDays(-1) : DateOnly.MinValue) : Today;
         var checks = State.HabitChecks.Where(c => c.HabitId == id && c.Date <= Today && habit.ExistsOn(c.Date))
             .Select(c => c.Date).ToHashSet();
         // An unfinished current day does not break yesterday's run.
-        if (!checks.Contains(end) && end > DateOnly.MinValue) end = end.AddDays(-1);
+        if (!finished && !checks.Contains(end) && end > DateOnly.MinValue) end = end.AddDays(-1);
         if (!checks.Contains(end)) return new(0, null, null);
         var start = end;
         while (start > habit.Created && checks.Contains(start.AddDays(-1))) start = start.AddDays(-1);
