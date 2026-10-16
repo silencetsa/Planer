@@ -17,6 +17,11 @@ public sealed record MoodToggle(DateOnly Date, Mood Mood);
 public sealed class PlannerViewModel : ObservableObject, IDisposable
 {
     private readonly PlannerEngine _engine;
+    private readonly IDesktopIntegration _desktop;
+    public bool AutoStartEnabled => _desktop.AutoStartEnabled;
+    public bool NotificationsEnabled => _engine.State.NotificationsEnabled;
+    public event EventHandler? SettingsRequested;
+    public IRelayCommand SettingsCommand { get; }
     private DateOnly _date;
     private PlannerScreen _screen;
     private DateOnly _observedToday;
@@ -84,9 +89,11 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
     public IRelayCommand<Guid> FinishPaymentCommand { get; }
     public IRelayCommand<Guid> DeletePaymentCommand { get; }
 
-    public PlannerViewModel(PlannerEngine engine)
+    public PlannerViewModel(PlannerEngine engine, IDesktopIntegration? desktop = null)
     {
-        _engine = engine; _date = Today; _observedToday = Today; _engine.Changed += EngineChanged;
+        _engine = engine; _desktop = desktop ?? new IsolatedDesktopIntegration();
+        SettingsCommand = new RelayCommand(() => SettingsRequested?.Invoke(this, EventArgs.Empty));
+        _date = Today; _observedToday = Today; _engine.Changed += EngineChanged;
         PreviousCommand = new RelayCommand(() => Shift(-1)); NextCommand = new RelayCommand(() => Shift(1));
         TodayCommand = new RelayCommand(() => Navigate(PlannerScreen.Week, Today));
         NavigateCommand = new RelayCommand<PlannerScreen>(screen => Navigate(screen, SelectedDate));
@@ -153,6 +160,21 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
     public Mood? MoodOn(DateOnly date) => _engine.MoodOn(date);
     public int HabitSuccess(Guid id) => _engine.State.HabitChecks.Count(c => c.HabitId == id);
     public int HabitStreak(Guid id) => _engine.HabitStreak(id).Days;
+    public string? SaveDesktopSettings(bool autoStart, bool notifications)
+    {
+        bool previousStartup = AutoStartEnabled, previousNotifications = NotificationsEnabled;
+        try
+        {
+            _desktop.SetAutoStart(autoStart); _desktop.SetNotificationChecks(notifications);
+            _engine.SetNotificationsEnabled(notifications); Refresh(); return null;
+        }
+        catch (Exception error)
+        {
+            try { _desktop.SetAutoStart(previousStartup); _desktop.SetNotificationChecks(previousNotifications); }
+            catch (Exception rollback) { return error.Message + "\nНе удалось восстановить настройки: " + rollback.Message; }
+            return error.Message;
+        }
+    }
     public PaymentRevision? PaymentRevision(Payment p) => p.RevisionOn(Today);
     public void Dispose() => _engine.Changed -= EngineChanged;
 }

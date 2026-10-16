@@ -1,6 +1,7 @@
 #define AppName "Планер"
-#define AppVersion "1.1.2"
+#define AppVersion "1.2.0"
 #define AppExe "Planer.App.exe"
+#define ToastClsid "46D3566D-8F52-45F8-9F20-891FC403878D"
 
 [Setup]
 AppId={{A316F590-BB3F-43E1-81C8-861EA1BC03BA}
@@ -35,11 +36,24 @@ Source: "..\artifacts\publish\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\src\Planer.App\Assets\AppIcon.ico"; DestDir: "{app}\Assets"; DestName: "AppIcon-{#AppVersion}.ico"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\AppIcon-{#AppVersion}.ico"; AppUserModelID: "Planer.Desktop"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\AppIcon-{#AppVersion}.ico"; AppUserModelID: "Planer.Desktop"; Check: CreateOrUpdateDesktopShortcut
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\AppIcon-{#AppVersion}.ico"; AppUserModelID: "Planer.Desktop"; AppUserModelToastActivatorCLSID: "{#ToastClsid}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\AppIcon-{#AppVersion}.ico"; AppUserModelID: "Planer.Desktop"; AppUserModelToastActivatorCLSID: "{#ToastClsid}"; Check: CreateOrUpdateDesktopShortcut
+
+[Registry]
+Root: HKCU; Subkey: "Software\Classes\planer-desktop"; ValueType: string; ValueData: "URL:Planer"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\planer-desktop"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\planer-desktop\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExe}"" --protocol ""%1"""
+Root: HKCU; Subkey: "Software\Classes\AppUserModelId\Planer.Desktop"; ValueType: string; ValueName: "DisplayName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\AppUserModelId\Planer.Desktop"; ValueType: string; ValueName: "IconUri"; ValueData: "{app}\Assets\AppIcon-{#AppVersion}.ico"
+Root: HKCU; Subkey: "Software\Classes\AppUserModelId\Planer.Desktop"; ValueType: string; ValueName: "CustomActivator"; ValueData: "{{{#ToastClsid}}"
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "Planer.Desktop"; Flags: uninsdeletevalue
 
 [Run]
+Filename: "{app}\{#AppExe}"; Parameters: "--configure-notifications"; WorkingDir: "{app}"; Flags: runhidden
 Filename: "{app}\{#AppExe}"; Description: "Открыть планер"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+Filename: "{app}\{#AppExe}"; Parameters: "--remove-integration"; WorkingDir: "{app}"; Flags: runhidden
 
 ; Personal data is stored separately in %LOCALAPPDATA%\Planer and is never removed by this installer.
 

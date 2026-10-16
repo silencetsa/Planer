@@ -19,6 +19,8 @@ $planerCases = @(
     @{ Name='today-layout-stress'; View='Today'; Scenario='TodayLayoutStress'; Separate=$true; Timeout=30000 },
     @{ Name='layout-recovery'; View='Week'; Scenario='LayoutRecovery'; Separate=$true; Timeout=30000 },
     @{ Name='tray-lifecycle'; View='Week'; Scenario='TrayLifecycle' },
+    @{ Name='reminder-activation'; View='Week'; Scenario='ReminderActivation'; Separate=$true; Timeout=30000 },
+    @{ Name='startup-hidden'; View='Week'; Scenario='StartupHidden'; Startup=$true; Separate=$true },
     @{ Name='recurring-month'; View='Month'; Scenario='RecurringMonth'; Separate=$true },
     @{ Name='week-large'; View='Week'; Large=$true },
     @{ Name='year-large'; View='Year'; Large=$true },
@@ -45,6 +47,7 @@ $planerCases = @(
     @{ Name='delete-recurring-dialog'; View='Week'; Scenario='DeleteRecurringDialog'; Separate=$true },
     @{ Name='move-recurring-dialog'; View='Week'; Scenario='MoveRecurringDialog'; Separate=$true },
     @{ Name='habit-dialog'; View='Habits'; Scenario='HabitDialog'; Empty=$true },
+    @{ Name='settings-dialog'; View='Week'; Scenario='SettingsDialog'; Separate=$true },
     @{ Name='payment-dialog'; View='Payments'; Scenario='PaymentDialog' },
     @{ Name='finish-habit-dialog'; View='Habits'; Scenario='FinishHabitDialog' },
     @{ Name='task-preview'; View='Week'; Preview=$true },
@@ -66,6 +69,7 @@ foreach ($planerCase in $planerCases) {
     if ($planerCase.Scenario) { $planerArgs += @('--scenario', $planerCase.Scenario) }
     if ($planerCase.Large) { $planerArgs += '--capture-large' }
     if ($planerCase.Preview) { $planerArgs += '--capture-task-preview' }
+    if ($planerCase.Startup) { $planerArgs += '--startup' }
     $planerProcess = Start-Process -FilePath $Executable -ArgumentList $planerArgs -WorkingDirectory (Split-Path -Parent $Executable) -WindowStyle Hidden -PassThru
     $planerTimeout = if ($planerCase.Timeout) { $planerCase.Timeout } else { 15000 }
     if (!$planerProcess.WaitForExit($planerTimeout)) {

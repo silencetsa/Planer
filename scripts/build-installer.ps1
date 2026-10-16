@@ -3,6 +3,10 @@ $planerRoot = Split-Path -Parent $PSScriptRoot
 $planerStagingDir = $null
 Push-Location $planerRoot
 try {
+    & "$PSScriptRoot\dotnet.ps1" run --project tests/Planer.Tests/Planer.Tests.csproj --configuration Release
+    if ($LASTEXITCODE -ne 0) { throw 'Проверки Core/SQLite не прошли' }
+    & "$PSScriptRoot\dotnet.ps1" run --project tests/Planer.Windows.Tests/Planer.Windows.Tests.csproj --configuration Release
+    if ($LASTEXITCODE -ne 0) { throw 'Проверки Windows-интеграции не прошли' }
     & "$PSScriptRoot\dotnet.ps1" publish src/Planer.App/Planer.App.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/win-x64 /p:Platform=x64 /p:PublishTrimmed=false /p:PublishReadyToRun=false /p:WindowsAppSDKSelfContained=true /p:TargetLatestRuntimePatch=true
     if ($LASTEXITCODE -ne 0) { throw 'Публикация приложения завершилась ошибкой' }
     & "$PSScriptRoot\verify-ui.ps1" -Executable (Join-Path $planerRoot 'artifacts\publish\win-x64\Planer.App.exe')

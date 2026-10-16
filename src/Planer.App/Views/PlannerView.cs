@@ -37,6 +37,7 @@ public sealed partial class PlannerView : UserControl
         DragTaskButton.ActiveDragEnded += ResetDrag;
         _vm.HabitEditorRequested += CreateHabit; _vm.HabitFinishRequested += FinishHabit;
         _vm.PaymentEditorRequested += EditPayment;
+        _vm.SettingsRequested += EditSettings;
     }
     private void Unsubscribe()
     {
@@ -46,6 +47,7 @@ public sealed partial class PlannerView : UserControl
         DragTaskButton.ActiveDragEnded -= ResetDrag; ResetDrag(this, EventArgs.Empty);
         _vm.HabitEditorRequested -= CreateHabit; _vm.HabitFinishRequested -= FinishHabit;
         _vm.PaymentEditorRequested -= EditPayment;
+        _vm.SettingsRequested -= EditSettings;
     }
     private void Changed(object? sender, PropertyChangedEventArgs args) { if (args.PropertyName == nameof(PlannerViewModel.Revision)) Render(); }
     private void Render()
@@ -67,6 +69,8 @@ public sealed partial class PlannerView : UserControl
         var menu = new MenuFlyout();
         menu.Items.Add(new MenuFlyoutItem { Text = "Привычки", Command = _vm.NavigateCommand, CommandParameter = PlannerScreen.Habits, Icon = new FontIcon { Glyph = "\uE73E" } });
         menu.Items.Add(new MenuFlyoutItem { Text = "Платежи", Command = _vm.NavigateCommand, CommandParameter = PlannerScreen.Payments, Icon = new FontIcon { Glyph = "\uE8C7" } });
+        menu.Items.Add(new MenuFlyoutSeparator());
+        menu.Items.Add(new MenuFlyoutItem { Text = "Автозапуск и уведомления", Command = _vm.SettingsCommand, Icon = new FontIcon { Glyph = "\uE713" } });
         settings.Flyout = menu; left.Children.Add(settings);
         left.Children.Add(Ui.Button(Ui.PeriodArrow(false), _vm.PreviousCommand, tooltip: "Предыдущий период"));
         var period = Ui.PeriodButton(_vm.Period, _vm.ParentCommand, "Открыть календарь");
@@ -161,15 +165,15 @@ public sealed partial class PlannerView : UserControl
         {
             var check = Ui.OriginalIcon("Completed.png", 16); check.HorizontalAlignment = HorizontalAlignment.Right; check.VerticalAlignment = VerticalAlignment.Top; contents.Children.Add(check);
         }
-        var button = new DragTaskButton { Content = contents, SourceTask = task }; button.Padding = new(7, compact ? 3 : 5, 7, compact ? 3 : 5);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, task.Description);
-        button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        button.Background = Ui.Brush(TaskBackground(task)); button.CornerRadius = new(4);
         return (contents, text);
     }
     private UIElement TaskBlock(PlannerTask task, bool compact = false)
     {
         var (contents, text) = TaskContents(task, compact);
+        var button = new DragTaskButton { Content = contents, SourceTask = task }; button.Padding = new(7, compact ? 3 : 5, 7, compact ? 3 : 5);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, task.Description);
+        button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        button.Background = Ui.Brush(TaskBackground(task)); button.CornerRadius = new(4);
         button.Resources["ButtonBackgroundPointerOver"] = button.Background;
         button.Resources["ButtonBackgroundPressed"] = button.Background;
         button.Click += (_, _) => { if (!button.IsClickSuppressed && !_taskDragInProgress && DateTime.UtcNow > _suppressClicksUntil) _vm.ToggleTaskCommand.Execute(task.Id); };

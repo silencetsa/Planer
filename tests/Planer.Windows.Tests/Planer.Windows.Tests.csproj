@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Planer.Core/Planer.Core.csproj" />
+    <Compile Include="../../src/Planer.App/DesktopIntegration.cs" Link="DesktopIntegration.cs" />
+    <Compile Include="../../src/Planer.App/WindowsNotifications.cs" Link="WindowsNotifications.cs" />
+    <Compile Include="../../src/Planer.App/ActivationBridge.cs" Link="ActivationBridge.cs" />
+  </ItemGroup>
+</Project>

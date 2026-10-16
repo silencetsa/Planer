@@ -16,6 +16,24 @@ internal static class UiSnapshot
     public static async Task SaveScenarioAsync(FrameworkElement view, string path, string scenario, PlannerViewModel vm)
     {
         await PrepareAsync(view);
+        if (scenario == "StartupHidden") { await SaveAsync(view, path); return; }
+        if (scenario == "ReminderActivation")
+        {
+            var application = (App)Application.Current; string key = ActivationBridge.KeyForDatabase(App.DatabasePath);
+            vm.Navigate(PlannerScreen.Month, vm.Today.AddMonths(-1));
+            if (!await ActivationBridge.Forward(key, DesktopActivation.Today)) throw new InvalidOperationException("Не обработан переход уведомления в текущий день");
+            var first = App.FloatingWindow ?? throw new InvalidOperationException("Не открыто окно сегодняшнего дня");
+            if (!await ActivationBridge.Forward(key, DesktopActivation.Today) || !ReferenceEquals(first, App.FloatingWindow))
+                throw new InvalidOperationException("Повторное уведомление создало второе окно дня");
+            if (!await ActivationBridge.Forward(key, DesktopActivation.Week) || vm.Screen != PlannerScreen.Week || vm.SelectedDate != vm.Today)
+                throw new InvalidOperationException("Уведомление переноса не открыло текущую неделю");
+            var start = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
+            start.ArgumentList.Add("--notification-check"); start.ArgumentList.Add("--data-dir"); start.ArgumentList.Add(Path.GetDirectoryName(App.DatabasePath)!);
+            using var child = System.Diagnostics.Process.Start(start)!;
+            await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(12));
+            if (child.ExitCode != 0) throw new InvalidOperationException("Фоновый запуск не передал проверку работающему экземпляру");
+            first.Close(); await SaveAsync(view, path); return;
+        }
         if (scenario == "CompletedTaskColors")
         {
             foreach (TaskKind kind in Enum.GetValues<TaskKind>())
@@ -175,6 +193,7 @@ internal static class UiSnapshot
                 else vm.MoveTaskCommand.Execute(new TaskMove(recurring.Id, vm.Today.AddDays(1), DayPart.Afternoon));
                 break;
             case "HabitDialog": vm.CreateHabitCommand.Execute(null); break;
+            case "SettingsDialog": vm.SettingsCommand.Execute(null); break;
             case "PaymentDialog": vm.CreatePaymentCommand.Execute(null); break;
             case "FinishHabitDialog": vm.FinishHabitCommand.Execute(vm.Habits.First(h => h.Ended is null).Id); break;
             default: throw new ArgumentException("Неизвестный сценарий снимка: " + scenario);
@@ -191,7 +210,6 @@ internal static class UiSnapshot
         }
         if (popupRoot is null || openedDialog is null) throw new InvalidOperationException($"Не загрузилось содержимое формы {scenario}");
         await PrepareAsync(popupRoot);
-        if (scenario == "TaskDialogOn") foreach (var toggle in Descendants<PrioritySwitch>(popupRoot)) toggle.IsChecked = true;
         var cancel = Descendants<Button>(popupRoot).FirstOrDefault(b => b.Content is string s && s == "Отмена");
         if (cancel is not null && (cancel.Background is not SolidColorBrush { Color: { R: 255, G: 238, B: 227 } }
             || cancel.Foreground is not SolidColorBrush { Color: { R: 255, G: 124, B: 5 } }))
@@ -199,6 +217,7 @@ internal static class UiSnapshot
         if (scenario is "DeleteTaskDialog" or "DeleteRecurringDialog"
             && !Descendants<Border>(popupRoot).Any(b => b.Name == "DeleteTaskPreview" && b.Background is SolidColorBrush))
             throw new InvalidOperationException("В подтверждении удаления отсутствует цветная карточка задачи");
+        if (scenario == "TaskDialogOn") foreach (var toggle in Descendants<PrioritySwitch>(popupRoot)) toggle.IsChecked = true;
         if (scenario == "TaskMultilineDialog" && NormalizeLines(Descendants<TextBox>((DependencyObject)openedDialog.Content).First().Text) != "Первая строка\nВторая строка")
             throw new InvalidOperationException("Редактор задачи потерял строки описания");
         var chrome = Descendants<Border>(popupRoot).FirstOrDefault(b => b.Name == "BackgroundElement");
