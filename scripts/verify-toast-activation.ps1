@@ -1,5 +1,6 @@
-param([string]$InstallDirectory = (Join-Path $env:LOCALAPPDATA 'Programs\Planer'), [switch]$ExpectCold)
+param([string]$InstallDirectory = (Join-Path $env:LOCALAPPDATA 'Programs\Planer'), [switch]$ExpectCold, [switch]$OpenWindows)
 $ErrorActionPreference = 'Stop'
+if (!$OpenWindows) { throw 'This check opens real planner windows, including the topmost day. Use -OpenWindows only when the user requests live testing. Automated UI checks use verify-ui.ps1.' }
 $planerRoot = Split-Path -Parent $PSScriptRoot
 $planerExe = (Resolve-Path -LiteralPath (Join-Path $InstallDirectory 'Planer.App.exe')).Path
 $planerClass = '46D3566D-8F52-45F8-9F20-891FC403878D'
