@@ -11,5 +11,6 @@
     <Compile Include="../../src/Planer.App/DesktopIntegration.cs" Link="DesktopIntegration.cs" />
     <Compile Include="../../src/Planer.App/WindowsNotifications.cs" Link="WindowsNotifications.cs" />
     <Compile Include="../../src/Planer.App/ActivationBridge.cs" Link="ActivationBridge.cs" />
+    <Compile Include="../../src/Planer.App/ToastActivationBridge.cs" Link="ToastActivationBridge.cs" />
   </ItemGroup>
 </Project>

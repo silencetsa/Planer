@@ -14,10 +14,13 @@ internal sealed class WindowsNotifications
     private readonly string _appId;
     public WindowsNotifications(string? appId = null) => _appId = appId ?? ShellIdentity.AppUserModelId;
     internal static string Tag(string key) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..16];
+    internal static string ActivationArgument(PlannerDestination destination) => destination switch
+    { PlannerDestination.Today => "today", PlannerDestination.Habits => "habits", _ => "week" };
+    internal static PlannerDestination? ParseActivation(string value) => value switch
+    { "today" => PlannerDestination.Today, "week" => PlannerDestination.Week, "habits" => PlannerDestination.Habits, _ => null };
     internal static string Payload(PlannerNotification notification)
     {
-        string target = notification.Destination switch { PlannerDestination.Today => "today", PlannerDestination.Habits => "habits", _ => "week" };
-        return new XElement("toast", new XAttribute("activationType", "protocol"), new XAttribute("launch", $"{Protocol}://{target}"),
+        return new XElement("toast", new XAttribute("activationType", "foreground"), new XAttribute("launch", ActivationArgument(notification.Destination)),
             new XElement("visual", new XElement("binding", new XAttribute("template", "ToastGeneric"),
                 new XElement("text", "Планер"), new XElement("text", notification.Body)))).ToString(SaveOptions.DisableFormatting);
     }
@@ -44,6 +47,22 @@ internal sealed class WindowsNotifications
         }
     }
     public void Clear() => ToastNotificationManager.History.Clear(_appId);
+    public void UpgradeActivationHistory()
+    {
+        // Replace existing 1.2.0 entries quietly, preserving tag, text, destination and expiry.
+        var notifier = ToastNotificationManager.CreateToastNotifier(_appId);
+        foreach (var previous in ToastNotificationManager.History.GetHistory(_appId).Where(t => t.Group == "planner"))
+        {
+            var content = XDocument.Parse(previous.Content.GetXml());
+            if (content.Root?.Attribute("activationType")?.Value != "protocol"
+                || ParseDestination(content.Root.Attribute("launch")?.Value ?? "") is not { } destination) continue;
+            content.Root.SetAttributeValue("activationType", "foreground");
+            content.Root.SetAttributeValue("launch", ActivationArgument(destination));
+            content.Root.Element("audio")?.Remove(); content.Root.Add(new XElement("audio", new XAttribute("silent", "true")));
+            var xml = new XmlDocument(); xml.LoadXml(content.ToString(SaveOptions.DisableFormatting));
+            notifier.Show(new ToastNotification(xml) { Tag = previous.Tag, Group = previous.Group, SuppressPopup = true, ExpirationTime = previous.ExpirationTime });
+        }
+    }
     internal static PlannerDestination? ParseDestination(string value)
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != Protocol || uri.Query.Length != 0

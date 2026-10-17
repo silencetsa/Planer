@@ -32,6 +32,25 @@ internal static class UiSnapshot
             using var child = System.Diagnostics.Process.Start(start)!;
             await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(12));
             if (child.ExitCode != 0) throw new InvalidOperationException("Фоновый запуск не передал проверку работающему экземпляру");
+            var toastClass = Guid.NewGuid(); application.RegisterToastActivation(toastClass);
+            async Task NativeActivate(PlannerDestination destination, Func<bool> reached)
+            {
+                await Task.Run(() =>
+                {
+                    object native = Activator.CreateInstance(Type.GetTypeFromCLSID(toastClass)!)!;
+                    try { System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(((IToastActivationCallback)native)
+                        .Activate(ShellIdentity.AppUserModelId, WindowsNotifications.ActivationArgument(destination), 0, 0)); }
+                    finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(native); }
+                });
+                for (int i = 0; i < 30 && !reached(); i++) await Task.Delay(50);
+                if (!reached()) throw new InvalidOperationException("Не обработана нативная активация уведомления: " + destination);
+            }
+            vm.Navigate(PlannerScreen.Month, vm.Today.AddMonths(-1));
+            first.AppWindow.Hide();
+            await NativeActivate(PlannerDestination.Today, () => ReferenceEquals(first, App.FloatingWindow) && first.AppWindow.IsVisible);
+            await NativeActivate(PlannerDestination.Week, () => vm.Screen == PlannerScreen.Week && vm.SelectedDate == vm.Today);
+            await NativeActivate(PlannerDestination.Habits, () => vm.Screen == PlannerScreen.Habits);
+            vm.Navigate(PlannerScreen.Week, vm.Today);
             first.Close(); await SaveAsync(view, path); return;
         }
         if (scenario == "CompletedTaskColors")

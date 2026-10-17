@@ -8,6 +8,14 @@ using Planer_App;
 using Windows.UI.Notifications;
 
 if (args.Contains("--notification-check")) return 0; // A temporary Task Scheduler action must never recursively run the test suite.
+if (args.Length == 2 && args[0] == "--activate-installed-toast")
+{
+    if (WindowsNotifications.ParseActivation(args[1]) is null) return 2;
+    object callback = Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid(ToastActivationBridge.ClassIdText))!)!;
+    try { Marshal.ThrowExceptionForHR(((IToastActivationCallback)callback).Activate("Planer.Desktop", args[1], 0, 0)); }
+    finally { Marshal.FinalReleaseComObject(callback); }
+    Console.WriteLine("Native toast activation accepted: " + args[1]); return 0;
+}
 int passed = 0, failed = 0;
 async Task Test(string name, Func<Task> test)
 {
@@ -24,8 +32,36 @@ await Test("Protocol activation accepts only the three planner destinations", ()
         Assert(WindowsNotifications.ParseDestination(invalid) is null, "Unsafe activation accepted: " + invalid);
     var xml = XDocument.Parse(WindowsNotifications.Payload(new() { Body = "Привычка <&> выполняется! <3", Destination = PlannerDestination.Today }));
     Assert(xml.Descendants("text").Last().Value == "Привычка <&> выполняется! <3", "Notification text was not XML-escaped");
-    Assert((string?)xml.Root!.Attribute("activationType") == "protocol", "Notification must use protocol activation");
+    Assert((string?)xml.Root!.Attribute("activationType") == "foreground", "Notification must use the native activator");
+    foreach (var destination in Enum.GetValues<PlannerDestination>())
+    {
+        var content = XDocument.Parse(WindowsNotifications.Payload(new() { Destination = destination }));
+        Assert(WindowsNotifications.ParseActivation(content.Root!.Attribute("launch")!.Value) == destination, "Notification destination was lost");
+    }
+    foreach (string invalid in new[] { "", "--startup", "today/path", "week?file=x", "planer-desktop://today", "Today" })
+        Assert(WindowsNotifications.ParseActivation(invalid) is null, "Unexpected native activation argument accepted");
     return Task.CompletedTask;
+});
+await Test("Windows COM resolves the native toast callback and routes all destinations without URI activation", async () =>
+{
+    var received = new System.Collections.Concurrent.ConcurrentQueue<PlannerDestination>();
+    var classId = Guid.NewGuid(); string appId = "Planer.Desktop.QA." + Guid.NewGuid().ToString("N");
+    using var bridge = new ToastActivationBridge(destination => { received.Enqueue(destination); return true; }, classId, appId);
+    await Task.Run(() =>
+    {
+        object native = Activator.CreateInstance(Type.GetTypeFromCLSID(classId)!)!;
+        try
+        {
+            var callback = (IToastActivationCallback)native;
+            foreach (var destination in Enum.GetValues<PlannerDestination>())
+                Marshal.ThrowExceptionForHR(callback.Activate(appId, WindowsNotifications.ActivationArgument(destination), 0, 0));
+            Assert(callback.Activate("Other.App", "today", 0, 0) < 0, "Unrelated app identity accepted");
+            Assert(callback.Activate(appId, "today?path=x", 0, 0) < 0, "Arbitrary activation command accepted");
+            Assert(callback.Activate(appId, "today", 0, 1) < 0, "Unexpected user input accepted");
+        }
+        finally { Marshal.FinalReleaseComObject(native); }
+    });
+    Assert(received.SequenceEqual(Enum.GetValues<PlannerDestination>()), "Native COM destinations were changed or duplicated");
 });
 await Test("Current-user activation pipe delivers only fixed commands and confirms processing", async () =>
 {
@@ -101,6 +137,33 @@ await Test("Windows accepts a quiet toast with the planner payload and preserves
         Assert(engine.State.Notifications.Single(n => n.Key == notification.Key).Dispatched, "Delivery receipt was not saved");
         gateway.Deliver(engine, DateTime.Now, suppressPopup: true);
         Assert(ToastNotificationManager.History.GetHistory(id).Count == history.Count, "The same notification was duplicated");
+        foreach (var destination in Enum.GetValues<PlannerDestination>())
+        {
+            var legacy = XDocument.Parse(WindowsNotifications.Payload(new() { Body = "Сохранённое уведомление <3", Destination = destination }));
+            legacy.Root!.SetAttributeValue("activationType", "protocol");
+            legacy.Root.SetAttributeValue("launch", "planer-desktop://" + WindowsNotifications.ActivationArgument(destination));
+            var xml = new Windows.Data.Xml.Dom.XmlDocument(); xml.LoadXml(legacy.ToString());
+            ToastNotificationManager.CreateToastNotifier(id).Show(new ToastNotification(xml) { Tag = "legacy-" + destination, Group = "planner", SuppressPopup = true, ExpirationTime = DateTimeOffset.Now.AddHours(1) });
+        }
+        for (int i = 0; i < 20 && ToastNotificationManager.History.GetHistory(id).Count < history.Count + 3; i++) await Task.Delay(100);
+        gateway.UpgradeActivationHistory();
+        for (int i = 0; i < 20; i++)
+        {
+            if (ToastNotificationManager.History.GetHistory(id).All(n => XDocument.Parse(n.Content.GetXml()).Root!.Attribute("activationType")!.Value == "foreground")) break;
+            await Task.Delay(100);
+        }
+        var upgraded = ToastNotificationManager.History.GetHistory(id).Where(n => n.Tag.StartsWith("legacy-")).ToList();
+        Assert(upgraded.Count == 3, "Existing notifications were lost on upgrade");
+        foreach (var existing in upgraded)
+        {
+            var xml = XDocument.Parse(existing.Content.GetXml());
+            Assert(xml.Root!.Attribute("activationType")!.Value == "foreground", "Old notification still uses URI activation");
+            Assert(WindowsNotifications.ParseActivation(xml.Root.Attribute("launch")!.Value) is { } destination && existing.Tag == "legacy-" + destination, "Existing notification changed destination");
+            Assert(xml.Descendants("text").Last().Value == "Сохранённое уведомление <3", "Existing notification text changed");
+            Assert(existing.ExpirationTime.HasValue, "Existing notification expiry was lost");
+        }
+        gateway.UpgradeActivationHistory();
+        Assert(ToastNotificationManager.History.GetHistory(id).Count == history.Count + 3, "Upgrade duplicated existing notifications");
     }
     finally { try { gateway.Clear(); } finally { Registry.CurrentUser.DeleteSubKeyTree(keyPath, throwOnMissingSubKey: false); } }
 });

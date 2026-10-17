@@ -46,6 +46,8 @@ Root: HKCU; Subkey: "Software\Classes\planer-desktop\shell\open\command"; ValueT
 Root: HKCU; Subkey: "Software\Classes\AppUserModelId\Planer.Desktop"; ValueType: string; ValueName: "DisplayName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\AppUserModelId\Planer.Desktop"; ValueType: string; ValueName: "IconUri"; ValueData: "{app}\Assets\AppIcon-{#AppVersion}.ico"
 Root: HKCU; Subkey: "Software\Classes\AppUserModelId\Planer.Desktop"; ValueType: string; ValueName: "CustomActivator"; ValueData: "{{{#ToastClsid}}"
+Root: HKCU; Subkey: "Software\Classes\CLSID\{{{#ToastClsid}}"; ValueType: string; ValueData: "Планер — уведомления"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\CLSID\{{{#ToastClsid}}\LocalServer32"; ValueType: string; ValueData: """{app}\{#AppExe}"" --toast-activated"
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "Planer.Desktop"; Flags: uninsdeletevalue
 
 [Run]

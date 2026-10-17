@@ -23,6 +23,8 @@ public partial class App : Application
     private TrayIcon? _tray;
     private PlannerEngine? _engine;
     private ActivationBridge? _activationBridge;
+    private ToastActivationBridge? _toastActivation;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _toastTimeout;
     private bool _isolated, _checkingNotifications;
     internal static TrayIcon? Tray => (Current as App)?._tray;
     internal static TodayWindow? FloatingWindow => (Current as App)?._dayWindow;
@@ -45,14 +47,20 @@ public partial class App : Application
         bool configure = commandLine.Contains("--configure-notifications"), remove = commandLine.Contains("--remove-integration");
         bool background = commandLine.Contains("--notification-check");
         bool startup = commandLine.Contains("--startup");
+        bool toastLaunch = commandLine.Contains("--toast-activated");
         if (configure || remove)
         {
             try
             {
                 if (_isolated) throw new InvalidOperationException("Системная регистрация недоступна в изолированном запуске");
+                ShellIdentity.Initialize();
                 var integration = new DesktopIntegration();
                 if (remove) { integration.SetNotificationChecks(false); integration.SetAutoStart(false); new WindowsNotifications().Clear(); }
-                else integration.SetNotificationChecks(new SqlitePlannerStore(DatabasePath).Load().NotificationsEnabled);
+                else
+                {
+                    integration.SetNotificationChecks(new SqlitePlannerStore(DatabasePath).Load().NotificationsEnabled);
+                    new WindowsNotifications().UpgradeActivationHistory();
+                }
             }
             catch (Exception error) { LogDesktopError(error); Environment.ExitCode = 1; }
             Exit(); return;
@@ -61,6 +69,18 @@ public partial class App : Application
         _instanceMutex = new Mutex(true, "Local\\Planer-" + mutexKey, out var firstInstance);
         if (!firstInstance)
         {
+            if (toastLaunch)
+            {
+                // Handle a COM-server launch racing an already starting foreground instance.
+                var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+                _toastActivation = new ToastActivationBridge(requested => dispatcher.TryEnqueue(async () =>
+                {
+                    if (!await ActivationBridge.Forward(mutexKey, DesktopDestination(requested))) Environment.ExitCode = 1;
+                    _toastTimeout?.Stop(); _toastActivation?.Dispose(); _instanceMutex.Dispose(); Exit();
+                }));
+                StartToastTimeout(() => { _toastActivation.Dispose(); _instanceMutex.Dispose(); Environment.ExitCode = 1; Exit(); });
+                return;
+            }
             var activation = background || startup ? DesktopActivation.CheckNotifications : destination switch
             { PlannerDestination.Today => DesktopActivation.Today, PlannerDestination.Habits => DesktopActivation.Habits, _ => DesktopActivation.Week };
             if (!await ActivationBridge.Forward(mutexKey, activation)) Environment.ExitCode = 1;
@@ -116,8 +136,13 @@ public partial class App : Application
                 })) completion.TrySetResult();
                 return completion.Task;
             });
+            if (!_isolated)
+            {
+                RegisterToastActivation();
+                if (toastLaunch) StartToastTimeout(() => Window.Close());
+            }
             Window.Closed += (_, _) => { _clockTimer.Stop(); _engine.Changed -= NotificationStateChanged; _activationBridge.Dispose();
-                _tray?.Dispose(); _dayWindow?.Close(); ViewModel.Dispose(); _instanceMutex.ReleaseMutex(); _instanceMutex.Dispose(); };
+                _toastTimeout?.Stop(); _toastActivation?.Dispose(); _tray?.Dispose(); _dayWindow?.Close(); ViewModel.Dispose(); _instanceMutex.ReleaseMutex(); _instanceMutex.Dispose(); };
         }
         catch (Exception ex)
         {
@@ -137,7 +162,7 @@ public partial class App : Application
                     Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Black), TextWrapping = TextWrapping.Wrap, Margin = new(24) } }
             } };
         }
-        if ((CapturePath is not null && CaptureScenario != "StartupHidden") || (!startup && destination != PlannerDestination.Today)) Window.Activate();
+        if ((CapturePath is not null && CaptureScenario != "StartupHidden") || (!startup && !toastLaunch && destination != PlannerDestination.Today)) Window.Activate();
         // Ordinary sessions have one icon; bulk rendering does not populate the user's tray.
         if (Window is MainWindow && _clockTimer is not null && (CapturePath is null || CaptureScenario is "TrayLifecycle" or "StartupHidden"))
         {
@@ -164,6 +189,27 @@ public partial class App : Application
             { File.WriteAllText(startupCapture + ".error.txt", "Автозапуск должен создать значок и оставить главное окно скрытым"); Window.Close(); return; }
             HandleActivation(DesktopActivation.Week);
         }
+    }
+    internal void RegisterToastActivation(Guid? classId = null)
+    {
+        _toastActivation = new ToastActivationBridge(requested => Window.DispatcherQueue.TryEnqueue(() =>
+        {
+            _toastTimeout?.Stop();
+            try { HandleActivation(DesktopDestination(requested)); LogToastActivation(requested); } catch (Exception error) { LogDesktopError(error); }
+        }), classId);
+    }
+    private static DesktopActivation DesktopDestination(PlannerDestination destination) => destination switch
+    { PlannerDestination.Today => DesktopActivation.Today, PlannerDestination.Habits => DesktopActivation.Habits, _ => DesktopActivation.Week };
+    private static void LogToastActivation(PlannerDestination destination)
+    {
+        try { File.AppendAllText(Path.Combine(Path.GetDirectoryName(DatabasePath)!, "desktop.log"), $"{DateTime.Now:O} Toast activation: {destination}\n"); }
+        catch { }
+    }
+    private void StartToastTimeout(Action expired)
+    {
+        _toastTimeout = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().CreateTimer();
+        _toastTimeout.Interval = TimeSpan.FromSeconds(20); _toastTimeout.IsRepeating = false;
+        _toastTimeout.Tick += (_, _) => expired(); _toastTimeout.Start();
     }
     internal void HandleActivation(DesktopActivation activation)
     {
