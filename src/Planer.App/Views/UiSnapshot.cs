@@ -50,6 +50,19 @@ internal static class UiSnapshot
                 var color = ((SolidColorBrush)card.Background).Color;
                 double lightness = (new[] { color.R, color.G, color.B }.Max() + new[] { color.R, color.G, color.B }.Min()) / 510d;
                 if (Math.Abs(lightness - .96) > .002) throw new InvalidOperationException("Фон выполненной задачи должен иметь HSL Lightness 96%");
+                var text = Descendants<TextBlock>(card).First();
+                var ink = ((SolidColorBrush)text.Foreground).Color;
+                if (card.SourceTask!.Kind == TaskKind.UrgentUnimportant)
+                {
+                    if (ink != Ui.Brush(Palette.TaskForegrounds[(int)TaskKind.UrgentUnimportant]).Color || Math.Abs(text.Opacity - .48) > .001)
+                        throw new InvalidOperationException("Оформление жёлтого текста не должно меняться");
+                }
+                else
+                {
+                    double inkLightness = (new[] { ink.R, ink.G, ink.B }.Max() + new[] { ink.R, ink.G, ink.B }.Min()) / 510d;
+                    if (Math.Abs(inkLightness - .85) > .002 || text.Opacity != 1)
+                        throw new InvalidOperationException("Текст выполненной задачи должен иметь HSL Lightness 85% без дополнительной прозрачности");
+                }
             }
             await SaveAsync(view, path); return;
         }

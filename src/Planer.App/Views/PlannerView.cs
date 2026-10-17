@@ -158,8 +158,12 @@ public sealed partial class PlannerView : UserControl
         ? Ui.WithLightness(Palette.TaskBackgrounds[(int)task.Kind], .96) : Palette.TaskBackgrounds[(int)task.Kind];
     private static (Grid Contents, TextBlock Text) TaskContents(PlannerTask task, bool compact = false)
     {
-        var text = Ui.Text(task.Description, compact ? 12.5 : 14, Palette.TaskForegrounds[(int)task.Kind]);
-        text.MaxLines = compact ? 1 : 2; text.TextTrimming = TextTrimming.CharacterEllipsis; text.Margin = new(0, 0, task.Completed ? 14 : 0, 0); if (task.Completed) text.Opacity = .48;
+        string foreground = Palette.TaskForegrounds[(int)task.Kind];
+        bool completedYellow = task.Completed && task.Kind == TaskKind.UrgentUnimportant;
+        if (task.Completed && !completedYellow) foreground = Ui.WithLightness(foreground, .85);
+        var text = Ui.Text(task.Description, compact ? 12.5 : 14, foreground);
+        text.MaxLines = compact ? 1 : 2; text.TextTrimming = TextTrimming.CharacterEllipsis; text.Margin = new(0, 0, task.Completed ? 14 : 0, 0);
+        if (completedYellow) text.Opacity = .48;
         var contents = new Grid(); contents.Children.Add(text);
         if (task.Completed)
         {
