@@ -13,6 +13,7 @@ public sealed partial class PlannerView
         var row = new Grid { ColumnSpacing = 14 }; row.ColumnDefinitions.Add(new() { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) }); row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         Ui.Add(row, Ui.Button(Ui.Icon("\uE72B", 20), _vm.NavigateCommand, PlannerScreen.Week, "Вернуться в планер недели"));
         Ui.Add(row, Ui.Text(_vm.Period, 26, Ui.Accent, true), 1);
+        if (_vm.Screen == PlannerScreen.Finances) return row;
         var create = Ui.PeriodButton("Создать", _vm.Screen == PlannerScreen.Habits ? _vm.CreateHabitCommand : _vm.CreatePaymentCommand);
         create.Name = "CreateManagementButton";
         create.MinWidth = 166; create.MinHeight = 48; create.Padding = new(24, 11, 24, 11);

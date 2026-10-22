@@ -11,11 +11,12 @@ using Planer.Core;
 namespace Planer_App.Views;
 
 /// <summary>Opt-in local rendering for QA; requires an explicit alternate data directory.</summary>
-internal static class UiSnapshot
+internal static partial class UiSnapshot
 {
     public static async Task SaveScenarioAsync(FrameworkElement view, string path, string scenario, PlannerViewModel vm)
     {
         await PrepareAsync(view);
+        if (scenario.StartsWith("Finance", StringComparison.Ordinal)) { await SaveFinanceScenarioAsync(view, path, scenario, vm); return; }
         if (scenario == "StartupHidden") { await SaveAsync(view, path); return; }
         if (scenario == "ReminderActivation")
         {

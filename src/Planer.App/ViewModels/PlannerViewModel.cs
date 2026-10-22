@@ -5,7 +5,7 @@ using Planer.Core;
 
 namespace Planer_App.ViewModels;
 
-public enum PlannerScreen { Week, Month, Year, Habits, Payments }
+public enum PlannerScreen { Week, Month, Year, Habits, Payments, Finances }
 public sealed record TaskLocation(DateOnly? Date, DayPart Part = DayPart.Evening);
 public sealed record TaskEditRequest(Guid? Id, string Description, bool Important, bool Urgent, TaskLocation Location, Repeat Repeat = Repeat.None);
 public sealed record TaskMove(Guid Id, DateOnly? Date, DayPart? Part = null);
@@ -14,7 +14,7 @@ public sealed record PaymentToggle(Guid Id, DateOnly Date);
 public sealed record MoodToggle(DateOnly Date, Mood Mood);
 
 /// <summary>Presentation state and commands; views do not mutate domain entities.</summary>
-public sealed class PlannerViewModel : ObservableObject, IDisposable
+public sealed partial class PlannerViewModel : ObservableObject, IDisposable
 {
     private readonly PlannerEngine _engine;
     private readonly IDesktopIntegration _desktop;
@@ -40,6 +40,7 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
         PlannerScreen.Month => SelectedDate.ToString("MMMM yyyy", Russian),
         PlannerScreen.Year => $"{SelectedDate.Year}",
         PlannerScreen.Habits => "Привычки",
+        PlannerScreen.Finances => "Финансы",
         _ => "Платежи"
     };
     public string PeriodKey => Screen switch
@@ -137,7 +138,10 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
         if (!moved) Refresh();
     }
     public void Refresh() { Revision++; OnPropertyChanged(nameof(Revision)); }
-    private void EngineChanged(object? sender, EventArgs args) => Refresh();
+    private void EngineChanged(object? sender, EventArgs args)
+    {
+        if (_savingBudgetIncome) OnPropertyChanged(nameof(Budget)); else Refresh();
+    }
     public void Run(Action action) { try { action(); } catch (Exception ex) { ErrorRequested?.Invoke(this, ex.Message); } }
     public void SaveTask(TaskEditRequest request, string description, bool important, bool urgent, Repeat repeat) => Run(() =>
     {

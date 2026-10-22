@@ -587,6 +587,106 @@ Test("SQLite keeps single deletions and failure rolls back exclusion and task to
     finally { Directory.Delete(folder, true); }
 });
 
+Test("Budget validates cents and never rounds malformed input into an affordable amount", () =>
+{
+    foreach (var text in new[] { "0", "12", "12,34", "12.34", "999999999", "0,01" }) Equal(true, BudgetMoney.TryParse(text, out _));
+    foreach (var text in new[] { "", "-1", "1 000", "1,000", "1.001", "1,2.3", ".50", "1e2", "1000000000", "NaN" }) Equal(false, BudgetMoney.TryParse(text, out _));
+    Equal(true, BudgetMoney.IsInput("")); Equal(true, BudgetMoney.IsInput("12,"));
+    var (e, _, _) = Setup(); Throws<ArgumentException>(() => e.SetBudgetIncome(-1));
+    Throws<ArgumentException>(() => e.SetBudgetIncome(1.001m)); Equal(0m, e.Budget.Income);
+});
+Test("Exact budget boundary succeeds, excess fails without changing the current plan", () =>
+{
+    var (e, clock, _) = Setup(); e.SetBudgetIncome(1000.50m); e.AddPayment("Интернет", 100.25m, clock.Today, Repeat.Monthly, null);
+    var first = e.SaveBudgetCategory(null, "  Еда  ", 500m); Equal("Еда", first.Name);
+    var last = e.SaveBudgetCategory(null, "Остальное", 400.25m); Equal(0m, e.Budget.Remaining);
+    try { e.SaveBudgetCategory(null, "Лишнее", .01m); throw new Exception("Unaffordable category was saved"); }
+    catch (ArgumentException error) { Equal(PlannerEngine.BudgetExceededMessage, error.Message); }
+    Equal(2, e.State.BudgetCategories.Count); Equal(900.25m, e.Budget.CategoryLimits);
+    e.SaveBudgetCategory(first.Id, "Еда и дом", 499.99m); Equal(.01m, e.Budget.Remaining);
+    e.SaveBudgetCategory(last.Id, "Прочее", 400.26m); Equal(0m, e.Budget.Remaining);
+    Throws<ArgumentException>(() => e.SaveBudgetCategory(first.Id, "Перерасход", 500m));
+    Equal("Еда и дом", e.State.BudgetCategories.Single(c => c.Id == first.Id).Name);
+});
+Test("Seven unique category colors exclude payment purple and a removed color can be reused", () =>
+{
+    var (e, _, _) = Setup(); e.SetBudgetIncome(1000);
+    for (int i = 0; i < 7; i++) e.SaveBudgetCategory(null, $"Категория {i}", 10);
+    Equal(7, e.State.BudgetCategories.Select(c => c.Color).Distinct().Count());
+    Equal(false, e.State.BudgetCategories.Any(c => c.Color == Palette.Elements[7]));
+    Throws<ArgumentException>(() => e.SaveBudgetCategory(null, "Восьмая", 1));
+    var first = e.State.BudgetCategories.First(); e.DeleteBudgetCategory(first.Id);
+    Equal(940m, e.Budget.Remaining); var added = e.SaveBudgetCategory(null, "Новая", 20);
+    Equal(first.Color, added.Color); Equal(7, e.State.BudgetCategories.Count);
+});
+Test("Budget mandatory amount uses active monthly plans, independently of paid occurrences", () =>
+{
+    var (e, clock, _) = Setup(); e.SetBudgetIncome(1000);
+    var monthly = e.AddPayment("Месяц", 100.25m, clock.Today.AddMonths(-1), Repeat.Monthly, null);
+    e.AddPayment("Неделя", 20, clock.Today, Repeat.Weekly, null);
+    e.AddPayment("Две недели", 30, clock.Today, Repeat.Fortnightly, null);
+    e.AddPayment("Год", 40, clock.Today, Repeat.Yearly, null); e.AddPayment("Разово", 50, clock.Today, Repeat.None, null);
+    var ended = e.AddPayment("Завершён", 60, clock.Today, Repeat.Monthly, null); e.FinishPayment(ended.Id);
+    var deleted = e.AddPayment("Удалён", 70, clock.Today, Repeat.Monthly, null); e.DeletePayment(deleted.Id);
+    Equal(100.25m, e.Budget.MandatoryPayments); e.TogglePayment(monthly.Id, clock.Today);
+    Equal(100.25m, e.Budget.MandatoryPayments);
+    e.EditPayment(monthly.Id, "Новая сумма", 150, clock.Today, Repeat.Monthly, null); Equal(150m, e.Budget.MandatoryPayments);
+    e.FinishPayment(monthly.Id); Equal(0m, e.Budget.MandatoryPayments);
+    Equal(100.25m, e.PaymentsOn(clock.Today.AddMonths(-1)).Where(p => p.PaymentId == monthly.Id).Sum(p => p.Amount));
+});
+Test("Lower income or higher payment preserves category limits and exposes a negative remainder", () =>
+{
+    var (e, clock, _) = Setup(); e.SetBudgetIncome(1000); var category = e.SaveBudgetCategory(null, "Еда", 800);
+    e.SetBudgetIncome(500); Equal(-300m, e.Budget.Remaining); Equal(800m, e.State.BudgetCategories.Single().Limit);
+    Throws<ArgumentException>(() => e.SaveBudgetCategory(null, "Другая", 1));
+    e.SaveBudgetCategory(category.Id, "Еда", 400); Equal(100m, e.Budget.Remaining);
+    e.AddPayment("Связь", 200, clock.Today, Repeat.Monthly, null); Equal(-100m, e.Budget.Remaining);
+    e.DeleteBudgetCategory(category.Id); Equal(300m, e.Budget.Remaining);
+    e.SetBudgetIncome(0); Equal(0m, e.Budget.Percent(200)); Equal(-200m, e.Budget.Remaining);
+});
+Test("Budget mutations roll back together on failed persistence", () =>
+{
+    var (e, _, store) = Setup(); e.SetBudgetIncome(100); var category = e.SaveBudgetCategory(null, "Еда", 20);
+    store.FailSave = true;
+    Throws<IOException>(() => e.SetBudgetIncome(200)); Equal(100m, e.Budget.Income);
+    Throws<IOException>(() => e.SaveBudgetCategory(category.Id, "Другое", 40)); Equal("Еда", e.State.BudgetCategories.Single().Name);
+    Throws<IOException>(() => e.SaveBudgetCategory(null, "Новая", 10)); Equal(1, e.State.BudgetCategories.Count);
+    Throws<IOException>(() => e.DeleteBudgetCategory(category.Id)); Equal(80m, e.Budget.Remaining);
+});
+Test("Schema 3 upgrade preserves every old row and stores one budget across months", () =>
+{
+    var folder = Path.Combine(Path.GetTempPath(), "Planer-test-" + Guid.NewGuid()); Directory.CreateDirectory(folder);
+    try
+    {
+        string path = Path.Combine(folder, "planner.db"); var clock = new TestClock { Today = new(2026, 10, 13) };
+        var store = new SqlitePlannerStore(path); var e = new PlannerEngine(store, clock);
+        var habit = e.AddHabit("История", Palette.Elements[3]); e.ToggleHabit(habit.Id, clock.Today);
+        var task = e.AddTask("Готово", true, true, clock.Today); e.ToggleTask(task.Id);
+        var payment = e.AddPayment("Интернет", 805.50m, clock.Today, Repeat.Monthly, null); e.TogglePayment(payment.Id, clock.Today);
+        e.SetGoal(Dates.WeekKey(clock.Today), "Цель"); e.SetNote(Dates.WeekKey(clock.Today), "Заметка");
+        using var c = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False"); c.Open();
+        using (var legacy = c.CreateCommand()) { legacy.CommandText = "DROP TABLE budget_categories; DELETE FROM metadata WHERE id='budget_income'; PRAGMA user_version=3;"; legacy.ExecuteNonQuery(); }
+        string OriginalRows()
+        {
+            var rows = new List<string>();
+            foreach (var table in new[] { "tasks", "task_series", "habits", "habit_checks", "payments", "payment_checks", "moods", "goals", "notes", "notifications", "metadata" })
+            {
+                using var cmd = c.CreateCommand(); cmd.CommandText = $"SELECT id,data FROM {table} WHERE id<>'budget_income' ORDER BY id";
+                using var reader = cmd.ExecuteReader(); while (reader.Read()) rows.Add($"{table}:{reader.GetString(0)}:{reader.GetString(1)}");
+            }
+            return string.Join('\n', rows);
+        }
+        string before = OriginalRows(); store = new SqlitePlannerStore(path); e = new PlannerEngine(store, clock);
+        Equal(0m, e.Budget.Income); Equal(0, e.State.BudgetCategories.Count); Equal(before, OriginalRows());
+        e.SetBudgetIncome(10000.25m); var category = e.SaveBudgetCategory(null, "Продукты", 2500.10m);
+        Equal(before, OriginalRows()); clock.Today = new(2026, 11, 2); e = new PlannerEngine(new SqlitePlannerStore(path), clock);
+        Equal(10000.25m, e.Budget.Income); Equal(category.Id, e.State.BudgetCategories.Single().Id); Equal(2500.10m, e.Budget.CategoryLimits);
+        Equal(true, e.TaskById(task.Id)!.Completed); Equal(1, e.State.HabitChecks.Count); Equal(1, e.State.PaymentChecks.Count);
+        using var version = c.CreateCommand(); version.CommandText = "PRAGMA user_version"; Equal(4L, (long)version.ExecuteScalar()!);
+    }
+    finally { Directory.Delete(folder, true); }
+});
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;
 

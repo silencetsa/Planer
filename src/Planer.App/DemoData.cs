@@ -29,6 +29,10 @@ internal static class DemoData
         ]);
         for (int i = 0; i < s.Tasks.Count; i++) s.Tasks[i].Order = i;
         s.Payments.Add(new() { Revisions = [new() { Name = "Интернет", Amount = 805, Start = today, Repeat = Repeat.Monthly }] });
+        s.BudgetIncome = 100000;
+        string[] categoryNames = ["Продукты", "Дом", "Транспорт", "Отдых", "Сбережения"];
+        decimal[] categoryLimits = [25000, 12000, 6000, 10000, 20000];
+        for (int i = 0; i < categoryNames.Length; i++) s.BudgetCategories.Add(new() { Name = categoryNames[i], Limit = categoryLimits[i], Color = Palette.Elements[i], Order = i });
         s.Goals[Dates.WeekKey(today)] = "Найти время для важных дел";
         s.Goals[Dates.MonthKey(today)] = "Завершить начатые проекты";
         s.Goals[Dates.YearKey(today)] = "Больше внимания себе и близким";

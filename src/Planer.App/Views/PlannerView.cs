@@ -37,6 +37,7 @@ public sealed partial class PlannerView : UserControl
         DragTaskButton.ActiveDragEnded += ResetDrag;
         _vm.HabitEditorRequested += CreateHabit; _vm.HabitFinishRequested += FinishHabit;
         _vm.PaymentEditorRequested += EditPayment;
+        _vm.BudgetCategoryEditorRequested += EditBudgetCategory;
         _vm.SettingsRequested += EditSettings;
     }
     private void Unsubscribe()
@@ -47,28 +48,35 @@ public sealed partial class PlannerView : UserControl
         DragTaskButton.ActiveDragEnded -= ResetDrag; ResetDrag(this, EventArgs.Empty);
         _vm.HabitEditorRequested -= CreateHabit; _vm.HabitFinishRequested -= FinishHabit;
         _vm.PaymentEditorRequested -= EditPayment;
+        _vm.BudgetCategoryEditorRequested -= EditBudgetCategory;
         _vm.SettingsRequested -= EditSettings;
     }
-    private void Changed(object? sender, PropertyChangedEventArgs args) { if (args.PropertyName == nameof(PlannerViewModel.Revision)) Render(); }
+    private void Changed(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(PlannerViewModel.Revision)) Render();
+        else if (args.PropertyName == nameof(PlannerViewModel.Budget)) _refreshFinanceValues?.Invoke();
+    }
     private void Render()
     {
         _dropSlots.Clear(); ResetDrag(this, EventArgs.Empty);
+        _refreshFinanceValues = null;
         _root.Children.Clear(); _root.RowDefinitions.Clear(); _root.Padding = new(_floating ? 10 : 18);
         if (_floating) { _root.Children.Add(DayCard(_vm.Today, true)); return; }
         _root.RowDefinitions.Add(new() { Height = GridLength.Auto }); _root.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) });
         Ui.Add(_root, Header());
-        UIElement board = _vm.Screen switch { PlannerScreen.Week => WeekBoard(), PlannerScreen.Month => MonthBoard(), PlannerScreen.Year => YearBoard(), PlannerScreen.Habits => HabitsBoard(), _ => PaymentsBoard() };
+        UIElement board = _vm.Screen switch { PlannerScreen.Week => WeekBoard(), PlannerScreen.Month => MonthBoard(), PlannerScreen.Year => YearBoard(), PlannerScreen.Habits => HabitsBoard(), PlannerScreen.Finances => FinancesBoard(), _ => PaymentsBoard() };
         if (board is FrameworkElement element) element.Margin = new(0, 14, 0, 0); Ui.Add(_root, board, row: 1);
     }
     private UIElement Header()
     {
-        if (_vm.Screen is PlannerScreen.Habits or PlannerScreen.Payments) return ManagementHeader();
+        if (_vm.Screen is PlannerScreen.Habits or PlannerScreen.Payments or PlannerScreen.Finances) return ManagementHeader();
         var header = Ui.Grid(2); header.ColumnDefinitions[0].Width = new(420);
         var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Top };
         var settings = Ui.Button(Ui.Icon("\uE713", 19), tooltip: "Настройки"); settings.Margin = new(0, 2, 12, 0);
         var menu = new MenuFlyout();
         menu.Items.Add(new MenuFlyoutItem { Text = "Привычки", Command = _vm.NavigateCommand, CommandParameter = PlannerScreen.Habits, Icon = new FontIcon { Glyph = "\uE73E" } });
         menu.Items.Add(new MenuFlyoutItem { Text = "Платежи", Command = _vm.NavigateCommand, CommandParameter = PlannerScreen.Payments, Icon = new FontIcon { Glyph = "\uE8C7" } });
+        menu.Items.Add(new MenuFlyoutItem { Text = "Финансы", Command = _vm.NavigateCommand, CommandParameter = PlannerScreen.Finances, Icon = new FontIcon { Glyph = "\uE8D4" } });
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(new MenuFlyoutItem { Text = "Автозапуск и уведомления", Command = _vm.SettingsCommand, Icon = new FontIcon { Glyph = "\uE713" } });
         settings.Flyout = menu; left.Children.Add(settings);

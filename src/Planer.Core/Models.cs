@@ -98,6 +98,8 @@ public sealed class PlannerState
     public Dictionary<DateOnly, Mood> Moods { get; set; } = [];
     public Dictionary<string, string> Goals { get; set; } = [];
     public Dictionary<string, string> Notes { get; set; } = [];
+    public decimal BudgetIncome { get; set; }
+    public List<BudgetCategory> BudgetCategories { get; set; } = [];
 }
 
 public static class Palette
