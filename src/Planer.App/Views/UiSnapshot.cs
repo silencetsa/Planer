@@ -250,6 +250,9 @@ internal static class UiSnapshot
             && !Descendants<Border>(popupRoot).Any(b => b.Name == "DeleteTaskPreview" && b.Background is SolidColorBrush))
             throw new InvalidOperationException("В подтверждении удаления отсутствует цветная карточка задачи");
         if (scenario == "TaskDialogOn") foreach (var toggle in Descendants<PrioritySwitch>(popupRoot)) toggle.IsChecked = true;
+        if (scenario == "DeleteRecurringDialog" && (!Descendants<RadioButton>(popupRoot).Any(b => b.Name == "DeleteOnlyOccurrence" && b.IsChecked == true)
+            || !Descendants<RadioButton>(popupRoot).Any(b => b.Name == "DeleteFutureChain")))
+            throw new InvalidOperationException("Удаление повтора должно предлагать одну задачу или будущую цепочку");
         if (scenario == "TaskMultilineDialog" && NormalizeLines(Descendants<TextBox>((DependencyObject)openedDialog.Content).First().Text) != "Первая строка\nВторая строка")
             throw new InvalidOperationException("Редактор задачи потерял строки описания");
         var chrome = Descendants<Border>(popupRoot).FirstOrDefault(b => b.Name == "BackgroundElement");

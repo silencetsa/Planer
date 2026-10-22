@@ -63,13 +63,22 @@ public sealed partial class PlannerEngine
         });
     }
     public void ToggleTask(Guid id) => Commit(() => { var task = FindTask(id); task.Completed = !task.Completed; });
-    public void DeleteTask(Guid id) => Commit(() =>
+    public void DeleteTask(Guid id, TaskDeleteScope scope = TaskDeleteScope.ThisAndFuture) => Commit(() =>
     {
+        if (!Enum.IsDefined(scope)) throw new ArgumentException("Выберите область удаления");
         var task = FindTask(id);
         if (SeriesFor(task) is { } series && task.OccurrenceIndex is { } index)
         {
-            StopChainFrom(series.ChainId, index);
-            State.Tasks.RemoveAll(t => BelongsToChain(t, series.ChainId) && t.OccurrenceIndex >= index);
+            if (scope == TaskDeleteScope.Occurrence)
+            {
+                (series.ExcludedIndices ??= []).Add(index);
+                State.Tasks.Remove(task);
+            }
+            else
+            {
+                StopChainFrom(series.ChainId, index);
+                State.Tasks.RemoveAll(t => BelongsToChain(t, series.ChainId) && t.OccurrenceIndex >= index);
+            }
         }
         else State.Tasks.Remove(task);
     });

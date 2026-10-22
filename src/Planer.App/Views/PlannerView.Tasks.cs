@@ -18,10 +18,19 @@ public sealed partial class PlannerView
         body.Children.Add(new Border { Name = "DeleteTaskPreview", Background = Ui.Brush(TaskBackground(task)),
             CornerRadius = new(4), Padding = new(7, 5, 7, 5), Child = new ScrollViewer { Content = contents, MaxHeight = 180,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
-        body.Children.Add(Ui.Text(task.SeriesId is null ? "Удалить эту задачу?" :
-            "Будут удалены эта задача и все следующие задачи в цепочке. Предыдущие задачи и их отметки сохранятся.", 14));
+        RadioButton? allFuture = null;
+        if (task.Repeat != Repeat.None)
+        {
+            string group = Guid.NewGuid().ToString();
+            var onlyThis = new RadioButton { Name = "DeleteOnlyOccurrence", Content = Ui.Text("Только эту задачу", 14), IsChecked = true, GroupName = group };
+            allFuture = new RadioButton { Name = "DeleteFutureChain", Content = Ui.Text("Эту и все будущие задачи", 14), GroupName = group };
+            body.Children.Add(onlyThis); body.Children.Add(allFuture);
+            body.Children.Add(Ui.Text("Предыдущие задачи и их отметки сохранятся.", 14));
+        }
+        else body.Children.Add(Ui.Text("Удалить эту задачу?", 14));
         var dialog = Ui.Dialog(XamlRoot, "Удалить задачу?", body, primary: "Удалить", scale: _scaleHost.ScaleFactor, defaultClose: true, destructive: true);
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary) _vm.DeleteTask(task.Id);
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            _vm.DeleteTask(task.Id, allFuture?.IsChecked == true ? TaskDeleteScope.ThisAndFuture : TaskDeleteScope.Occurrence);
     }
 
     private async void ChooseTaskMoveScope(object? sender, TaskMove move)

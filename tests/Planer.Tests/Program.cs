@@ -548,6 +548,45 @@ Test("A missed final active day leaves a finished habit with no current streak",
     Equal(0, e.HabitStreak(habit.Id).Days); Equal(1, e.State.HabitChecks.Count);
 });
 
+Test("Deleting one repeat preserves siblings and cannot regenerate through restart or rollover", () =>
+{
+    var (e, clock, store) = Setup(); var first = e.AddTask("Повтор", true, false, clock.Today, repeat: Repeat.Weekly);
+    e.ToggleTask(first.Id); var second = e.TasksOn(clock.Today.AddDays(7)).Single();
+    var third = e.TasksOn(clock.Today.AddDays(14)).Single(); e.DeleteTask(second.Id, TaskDeleteScope.Occurrence);
+    e = new PlannerEngine(store, clock);
+    Equal(0, e.TasksOn(second.Date!.Value).Count()); Equal(third.Id, e.TasksOn(third.Date!.Value).Single().Id);
+    Equal(true, e.TaskById(first.Id)!.Completed);
+    clock.Today = clock.Today.AddDays(28); e.ReconcileWeek();
+    Equal(false, e.State.Tasks.Any(t => t.OccurrenceIndex == second.OccurrenceIndex));
+    Equal(true, e.State.Tasks.Any(t => t.OccurrenceIndex == 3));
+});
+Test("Deleted monthly exceptions remain excluded after a future reschedule and a pause", () =>
+{
+    var (e, clock, store) = Setup(new(2026, 1, 31));
+    e.AddTask("Месяц", false, false, clock.Today, repeat: Repeat.Monthly);
+    var feb = e.TasksOn(new(2026, 2, 28)).Single(); var march = e.TasksOn(new(2026, 3, 31)).Single();
+    e.DeleteTask(march.Id, TaskDeleteScope.Occurrence);
+    e.MoveTask(feb.Id, new(2026, 2, 27), scope: TaskMoveScope.ThisAndFuture);
+    Equal(0, e.TasksOn(new(2026, 3, 27)).Count()); Equal(1, e.TasksOn(new(2026, 4, 27)).Count());
+    e.MoveTask(feb.Id, null, scope: TaskMoveScope.ThisAndFuture);
+    e.MoveTask(feb.Id, new(2026, 2, 26)); e = new PlannerEngine(store, clock);
+    Equal(0, e.TasksOn(new(2026, 3, 26)).Count()); Equal(1, e.TasksOn(new(2026, 4, 26)).Count());
+});
+Test("SQLite keeps single deletions and failure rolls back exclusion and task together", () =>
+{
+    var (e, clock, memory) = Setup(); var first = e.AddTask("Ошибка", false, true, clock.Today, repeat: Repeat.Weekly);
+    memory.FailSave = true; Throws<IOException>(() => e.DeleteTask(first.Id, TaskDeleteScope.Occurrence)); memory.FailSave = false;
+    Equal(first.Id, e.TasksOn(clock.Today).Single().Id); Equal(null, e.State.TaskSeries.Single().ExcludedIndices);
+    var folder = Path.Combine(Path.GetTempPath(), "Planer-test-" + Guid.NewGuid()); Directory.CreateDirectory(folder);
+    try
+    {
+        var store = new SqlitePlannerStore(Path.Combine(folder, "planner.db")); store.Save(e.State);
+        e = new PlannerEngine(store, clock); e.DeleteTask(first.Id, TaskDeleteScope.Occurrence); e = new PlannerEngine(store, clock);
+        Equal(0, e.TasksOn(clock.Today).Count()); Equal(1, e.TasksOn(clock.Today.AddDays(7)).Count());
+    }
+    finally { Directory.Delete(folder, true); }
+});
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;
 

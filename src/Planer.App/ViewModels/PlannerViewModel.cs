@@ -144,7 +144,7 @@ public sealed class PlannerViewModel : ObservableObject, IDisposable
         if (request.Id is { } id) _engine.EditTask(id, description, important, urgent, repeat);
         else _engine.AddTask(description, important, urgent, request.Location.Date, request.Location.Part, repeat);
     });
-    public void DeleteTask(Guid id) => Run(() => _engine.DeleteTask(id));
+    public void DeleteTask(Guid id, TaskDeleteScope scope = TaskDeleteScope.Occurrence) => Run(() => _engine.DeleteTask(id, scope));
     public void MoveTask(TaskMove move, TaskMoveScope scope) => Run(() => _engine.MoveTask(move.Id, move.Date, move.Part, scope));
     public void AddHabit(string name, string color) => Run(() => _engine.AddHabit(name, color));
     public void FinishHabit(Guid id) => Run(() => _engine.FinishHabit(id));

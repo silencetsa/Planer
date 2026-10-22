@@ -53,6 +53,9 @@ public sealed class TaskSeries
     public long BeginsAt => ActiveFromIndex ?? FirstIndex;
     // Exclusive. Null means the schedule continues indefinitely.
     public long? EndIndex { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public HashSet<long>? ExcludedIndices { get; set; }
 }
 
 public enum TaskMoveScope { Occurrence, ThisAndFuture }
+public enum TaskDeleteScope { Occurrence, ThisAndFuture }

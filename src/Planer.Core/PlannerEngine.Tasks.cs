@@ -24,7 +24,7 @@ public sealed partial class PlannerEngine
                 long index = series.FirstIndex + localIndex;
                 if (series.EndIndex is { } end && index >= end) break;
                 if (index < series.BeginsAt) continue;
-                if (existing.Contains((series.Id, index))) continue;
+                if (existing.Contains((series.Id, index)) || series.ExcludedIndices?.Contains(index) == true) continue;
                 yield return new PlannerTask { SeriesId = series.Id, OccurrenceIndex = index, Date = date, Part = series.Part,
                     Description = series.Description, Important = series.Important, Urgent = series.Urgent, Repeat = series.Repeat, Order = ++order };
             }
@@ -43,6 +43,9 @@ public sealed partial class PlannerEngine
     {
         var series = new TaskSeries { ChainId = chainId ?? Guid.NewGuid(), Start = task.Date, Repeat = task.Repeat, Part = task.Part,
             Description = task.Description, Important = task.Important, Urgent = task.Urgent, FirstIndex = firstIndex };
+        var excluded = State.TaskSeries.Where(s => s.ChainId == series.ChainId).SelectMany(s => s.ExcludedIndices ?? [])
+            .Where(index => index >= firstIndex).ToHashSet();
+        if (excluded.Count > 0) series.ExcludedIndices = excluded;
         State.TaskSeries.Add(series); task.SeriesId = series.Id; task.OccurrenceIndex = firstIndex;
     }
 
