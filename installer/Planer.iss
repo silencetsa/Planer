@@ -1,5 +1,5 @@
 #define AppName "Планер"
-#define AppVersion "1.3.0"
+#define AppVersion "1.3.1"
 #define AppExe "Planer.App.exe"
 #define ToastClsid "46D3566D-8F52-45F8-9F20-891FC403878D"
 
