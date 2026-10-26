@@ -62,6 +62,11 @@ $planerCases = @(
     @{ Name='habit-dialog'; View='Habits'; Scenario='HabitDialog'; Empty=$true },
     @{ Name='settings-dialog'; View='Week'; Scenario='SettingsDialog'; Separate=$true },
     @{ Name='payment-dialog'; View='Payments'; Scenario='PaymentDialog' },
+    @{ Name='delete-payment-dialog'; View='Payments'; Scenario='ConfirmationPaymentDelete' },
+    @{ Name='delete-payment-dialog-large'; View='Payments'; Scenario='ConfirmationPaymentDelete'; Large=$true },
+    @{ Name='finish-payment-dialog'; View='Payments'; Scenario='ConfirmationPaymentFinish' },
+    @{ Name='delete-category-dialog'; View='Finances'; Scenario='ConfirmationCategory' },
+    @{ Name='payment-confirmation-actions'; View='Payments'; Scenario='ConfirmationActions'; Separate=$true; Timeout=30000 },
     @{ Name='finish-habit-dialog'; View='Habits'; Scenario='FinishHabitDialog' },
     @{ Name='task-preview'; View='Week'; Preview=$true },
     @{ Name='task-preview-large'; View='Week'; Preview=$true; Large=$true }

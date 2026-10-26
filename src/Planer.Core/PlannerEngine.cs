@@ -172,11 +172,17 @@ public sealed partial class PlannerEngine
         Commit(() =>
         {
             var payment = State.Payments.First(p => p.Id == id);
-            payment.Revisions.RemoveAll(x => x.EffectiveFrom == Today);
+            payment.Revisions.RemoveAll(x => x.EffectiveFrom >= Today);
             payment.Revisions.Add(new() { EffectiveFrom = Today, Name = r.Name, Amount = r.Amount, Start = r.Start, Repeat = r.Repeat, End = Today });
+            State.PaymentChecks.RemoveAll(c => c.PaymentId == id && c.Date > Today);
         });
     }
-    public void DeletePayment(Guid id) => Commit(() => State.Payments.First(p => p.Id == id).DeletedFrom = Today);
+    public void DeletePayment(Guid id) => Commit(() =>
+    {
+        var payment = State.Payments.First(p => p.Id == id);
+        State.Payments.Remove(payment);
+        State.PaymentChecks.RemoveAll(c => c.PaymentId == id);
+    });
     public void TogglePayment(Guid id, DateOnly date) => Commit(() =>
     {
         if (!State.Payments.First(p => p.Id == id).OccursOn(date)) throw new InvalidOperationException("На эту дату платежа нет");

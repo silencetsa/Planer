@@ -114,7 +114,6 @@ Test("Payment edit changes today and future, preserves historical amount and che
     e.EditPayment(p.Id, "new", 200, new(2026, 10, 6), Repeat.Weekly, null);
     Equal(100m, e.PaymentsOn(new(2026, 10, 6)).Single().Amount); Equal(true, e.PaymentsOn(new(2026, 10, 6)).Single().Completed);
     Equal(200m, e.PaymentsOn(new(2026, 10, 13)).Single().Amount);
-    e.DeletePayment(p.Id); Equal(1, e.PaymentsOn(new(2026, 10, 6)).Count()); Equal(0, e.PaymentsOn(new(2026, 10, 13)).Count());
 });
 Test("Finishing a series today includes today's payment", () =>
 {
@@ -683,6 +682,62 @@ Test("Schema 3 upgrade preserves every old row and stores one budget across mont
         Equal(10000.25m, e.Budget.Income); Equal(category.Id, e.State.BudgetCategories.Single().Id); Equal(2500.10m, e.Budget.CategoryLimits);
         Equal(true, e.TaskById(task.Id)!.Completed); Equal(1, e.State.HabitChecks.Count); Equal(1, e.State.PaymentChecks.Count);
         using var version = c.CreateCommand(); version.CommandText = "PRAGMA user_version"; Equal(4L, (long)version.ExecuteScalar()!);
+    }
+    finally { Directory.Delete(folder, true); }
+});
+
+Test("Deleting a payment removes every dated occurrence and only its own checks", () =>
+{
+    var (e, clock, store) = Setup(new(2026, 10, 26)); var yesterday = clock.Today.AddDays(-1);
+    var payment = e.AddPayment("VK", 199, yesterday, Repeat.Monthly, null);
+    var other = e.AddPayment("Other", 300, yesterday, Repeat.Monthly, null);
+    e.TogglePayment(payment.Id, yesterday); e.TogglePayment(payment.Id, yesterday.AddMonths(1)); e.TogglePayment(other.Id, yesterday);
+    e.EditPayment(payment.Id, "VK new", 249, yesterday, Repeat.Monthly, null);
+    e.DeletePayment(payment.Id); e = new PlannerEngine(store, clock);
+    Equal(false, e.State.Payments.Any(p => p.Id == payment.Id));
+    foreach (var date in new[] { yesterday, clock.Today, yesterday.AddMonths(1), yesterday.AddYears(10) })
+        Equal(false, e.PaymentsOn(date).Any(p => p.PaymentId == payment.Id));
+    Equal(false, e.State.PaymentChecks.Any(c => c.PaymentId == payment.Id));
+    Equal(true, e.PaymentsOn(yesterday).Single(p => p.PaymentId == other.Id).Completed);
+    Equal(300m, e.Budget.MandatoryPayments);
+});
+Test("Finishing a payment keeps historical amounts and today's check, clearing future marks and revisions", () =>
+{
+    var (e, clock, _) = Setup(new(2026, 10, 25)); var start = clock.Today;
+    var payment = e.AddPayment("History", 100, start, Repeat.Weekly, null); e.TogglePayment(payment.Id, start);
+    clock.Today = start.AddDays(7); e.EditPayment(payment.Id, "Current", 200, start, Repeat.Weekly, null);
+    e.TogglePayment(payment.Id, clock.Today); e.TogglePayment(payment.Id, clock.Today.AddDays(7));
+    payment.Revisions.Add(new() { EffectiveFrom = clock.Today.AddDays(14), Name = "Future", Amount = 300, Start = start, Repeat = Repeat.Weekly });
+    e.FinishPayment(payment.Id);
+    Equal(100m, e.PaymentsOn(start).Single().Amount); Equal(true, e.PaymentsOn(start).Single().Completed);
+    Equal(200m, e.PaymentsOn(clock.Today).Single().Amount); Equal(true, e.PaymentsOn(clock.Today).Single().Completed);
+    Equal(0, e.PaymentsOn(clock.Today.AddDays(7)).Count()); Equal(0, e.PaymentsOn(clock.Today.AddDays(14)).Count());
+    Equal(2, e.State.PaymentChecks.Count); Equal(false, payment.IsActive(clock.Today));
+});
+Test("Failed deletion or finish cannot partially erase a payment or its paid history", () =>
+{
+    var (e, clock, store) = Setup(); var payment = e.AddPayment("Protected", 100, clock.Today, Repeat.Monthly, null);
+    e.TogglePayment(payment.Id, clock.Today); e.TogglePayment(payment.Id, clock.Today.AddMonths(1));
+    string before = JsonSerializer.Serialize(e.State); store.FailSave = true;
+    Throws<IOException>(() => e.DeletePayment(payment.Id)); Equal(before, JsonSerializer.Serialize(e.State));
+    Throws<IOException>(() => e.FinishPayment(payment.Id)); Equal(before, JsonSerializer.Serialize(e.State));
+});
+Test("SQLite retains complete payment deletion and inclusive finish without changing unrelated history", () =>
+{
+    var folder = Path.Combine(Path.GetTempPath(), "Planer-test-" + Guid.NewGuid()); Directory.CreateDirectory(folder);
+    try
+    {
+        var clock = new TestClock { Today = new(2026, 10, 26) }; var store = new SqlitePlannerStore(Path.Combine(folder, "planner.db"));
+        var e = new PlannerEngine(store, clock); var yesterday = clock.Today.AddDays(-1);
+        var deleted = e.AddPayment("Deleted", 100, yesterday, Repeat.Weekly, null);
+        var finished = e.AddPayment("Finished", 200, clock.Today.AddDays(-7), Repeat.Weekly, null);
+        e.TogglePayment(deleted.Id, yesterday); e.TogglePayment(finished.Id, clock.Today.AddDays(-7)); e.TogglePayment(finished.Id, clock.Today);
+        e.SetNote(Dates.WeekKey(clock.Today), "Keep note"); var task = e.AddTask("Keep task", true, false, clock.Today);
+        e.DeletePayment(deleted.Id); e.FinishPayment(finished.Id); e = new PlannerEngine(new SqlitePlannerStore(store.DatabasePath), clock);
+        Equal(false, e.State.Payments.Any(p => p.Id == deleted.Id)); Equal(false, e.State.PaymentChecks.Any(c => c.PaymentId == deleted.Id));
+        Equal(true, e.PaymentsOn(clock.Today).Single().Completed); Equal(true, e.PaymentsOn(clock.Today.AddDays(-7)).Single().Completed);
+        Equal(0, e.PaymentsOn(clock.Today.AddDays(7)).Count()); Equal(task.Id, e.TasksOn(clock.Today).Single().Id);
+        Equal("Keep note", e.Note(Dates.WeekKey(clock.Today)));
     }
     finally { Directory.Delete(folder, true); }
 });

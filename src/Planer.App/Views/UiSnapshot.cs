@@ -16,6 +16,7 @@ internal static partial class UiSnapshot
     public static async Task SaveScenarioAsync(FrameworkElement view, string path, string scenario, PlannerViewModel vm)
     {
         await PrepareAsync(view);
+        if (scenario.StartsWith("Confirmation", StringComparison.Ordinal)) { await SaveConfirmationScenarioAsync(view, path, scenario, vm); return; }
         if (scenario.StartsWith("Finance", StringComparison.Ordinal)) { await SaveFinanceScenarioAsync(view, path, scenario, vm); return; }
         if (scenario == "StartupHidden") { await SaveAsync(view, path); return; }
         if (scenario == "ReminderActivation")

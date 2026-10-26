@@ -35,7 +35,7 @@ public sealed partial class PlannerView
                 var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
                 if (p.IsActive(_vm.Today)) actions.Children.Add(Ui.Button(Ui.Icon("\uE73E", 19, "#32AE65"), _vm.FinishPaymentCommand, p.Id, "Завершить серию сегодня"));
                 actions.Children.Add(Ui.Button(Ui.Icon("\uE70F", 18), _vm.EditPaymentCommand, p.Id, "Редактировать платёж"));
-                actions.Children.Add(Ui.Button(Ui.Icon("\uE74D", 18), _vm.DeletePaymentCommand, p.Id, "Удалить платёж с сегодняшнего дня")); Ui.Add(row, actions, 2);
+                actions.Children.Add(Ui.Button(Ui.Icon("\uE74D", 18), _vm.DeletePaymentCommand, p.Id, "Удалить всю цепочку платежа")); Ui.Add(row, actions, 2);
                 list.Children.Add(Ui.Card(row));
             }
             var total = Ui.Text("Итого: " + FormatAmount(group.Sum(p => p.Revision.Amount)), 17, Ui.Accent, true); total.HorizontalAlignment = HorizontalAlignment.Right; total.Margin = new(0, 0, 13, 10); list.Children.Add(total);

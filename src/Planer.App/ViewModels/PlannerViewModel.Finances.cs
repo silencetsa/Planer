@@ -9,6 +9,7 @@ public sealed partial class PlannerViewModel
     public BudgetSummary Budget => _engine.Budget;
     public IReadOnlyList<BudgetCategory> BudgetCategories => _engine.State.BudgetCategories.OrderBy(c => c.Order).ThenBy(c => c.Id).ToList();
     public event EventHandler<BudgetCategory?>? BudgetCategoryEditorRequested;
+    public event EventHandler<BudgetCategory>? BudgetCategoryDeleteRequested;
     private IRelayCommand? _createBudgetCategory;
     private IRelayCommand<Guid>? _editBudgetCategory, _deleteBudgetCategory;
     public IRelayCommand CreateBudgetCategoryCommand => _createBudgetCategory ??= new RelayCommand(() => BudgetCategoryEditorRequested?.Invoke(this, null));
@@ -16,7 +17,11 @@ public sealed partial class PlannerViewModel
     {
         if (BudgetCategories.FirstOrDefault(c => c.Id == id) is { } category) BudgetCategoryEditorRequested?.Invoke(this, category);
     });
-    public IRelayCommand<Guid> DeleteBudgetCategoryCommand => _deleteBudgetCategory ??= new RelayCommand<Guid>(id => Run(() => _engine.DeleteBudgetCategory(id)));
+    public IRelayCommand<Guid> DeleteBudgetCategoryCommand => _deleteBudgetCategory ??= new RelayCommand<Guid>(id =>
+    {
+        if (BudgetCategories.FirstOrDefault(c => c.Id == id) is { } category) BudgetCategoryDeleteRequested?.Invoke(this, category);
+    });
+    public void DeleteBudgetCategory(Guid id) => Run(() => _engine.DeleteBudgetCategory(id));
 
     public string? SaveBudgetIncome(string text)
     {

@@ -37,7 +37,10 @@ public sealed partial class PlannerView : UserControl
         DragTaskButton.ActiveDragEnded += ResetDrag;
         _vm.HabitEditorRequested += CreateHabit; _vm.HabitFinishRequested += FinishHabit;
         _vm.PaymentEditorRequested += EditPayment;
+        _vm.PaymentDeleteRequested += DeletePayment;
+        _vm.PaymentFinishRequested += FinishPayment;
         _vm.BudgetCategoryEditorRequested += EditBudgetCategory;
+        _vm.BudgetCategoryDeleteRequested += DeleteBudgetCategory;
         _vm.SettingsRequested += EditSettings;
     }
     private void Unsubscribe()
@@ -48,7 +51,10 @@ public sealed partial class PlannerView : UserControl
         DragTaskButton.ActiveDragEnded -= ResetDrag; ResetDrag(this, EventArgs.Empty);
         _vm.HabitEditorRequested -= CreateHabit; _vm.HabitFinishRequested -= FinishHabit;
         _vm.PaymentEditorRequested -= EditPayment;
+        _vm.PaymentDeleteRequested -= DeletePayment;
+        _vm.PaymentFinishRequested -= FinishPayment;
         _vm.BudgetCategoryEditorRequested -= EditBudgetCategory;
+        _vm.BudgetCategoryDeleteRequested -= DeleteBudgetCategory;
         _vm.SettingsRequested -= EditSettings;
     }
     private void Changed(object? sender, PropertyChangedEventArgs args)

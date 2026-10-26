@@ -33,7 +33,7 @@ internal static partial class UiSnapshot
         }
         if (scenario == "FinanceFull")
         {
-            foreach (var category in vm.BudgetCategories) vm.DeleteBudgetCategoryCommand.Execute(category.Id);
+            foreach (var category in vm.BudgetCategories) vm.DeleteBudgetCategory(category.Id);
             if (vm.SaveBudgetIncome(vm.Budget.MandatoryPayments.ToString(PlannerViewModel.Russian)) is { } error) throw new InvalidOperationException(error);
             vm.Refresh();
         }
@@ -101,7 +101,12 @@ internal static partial class UiSnapshot
                 amount = Descendants<TextBox>(root).Single(t => t.Name == "BudgetCategoryLimit"); amount.Text = "99,99";
                 InvokeBudgetSave(root); await WaitForBudgetDialogCloseAsync(view);
                 if (vm.BudgetCategories.Single(c => c.Id == saved.Id).Limit != 99.99m) throw new InvalidOperationException("Редактирование не изменило лимит");
-                vm.DeleteBudgetCategoryCommand.Execute(saved.Id); await PrepareAsync(view);
+                vm.DeleteBudgetCategoryCommand.Execute(saved.Id); (dialog, root) = await FindBudgetDialogAsync(view);
+                if (!vm.BudgetCategories.Any(c => c.Id == saved.Id)) throw new InvalidOperationException("Категория удалена до подтверждения");
+                InvokeDialogButton(root, "Отмена"); await WaitForBudgetDialogCloseAsync(view);
+                if (!vm.BudgetCategories.Any(c => c.Id == saved.Id)) throw new InvalidOperationException("Отмена удалила категорию");
+                vm.DeleteBudgetCategoryCommand.Execute(saved.Id); (dialog, root) = await FindBudgetDialogAsync(view);
+                InvokeDialogButton(root, "Удалить"); await WaitForBudgetDialogCloseAsync(view); await PrepareAsync(view);
                 if (vm.BudgetCategories.Count != previousCount || vm.BudgetCategories.Any(c => c.Id == saved.Id)) throw new InvalidOperationException("Не удалена плановая категория");
                 await SaveAsync(view, path); return;
             }
@@ -111,7 +116,11 @@ internal static partial class UiSnapshot
     }
     private static void InvokeBudgetSave(FrameworkElement root)
     {
-        var save = Descendants<Button>(root).Single(b => b.Content is string text && text == "Сохранить");
+        InvokeDialogButton(root, "Сохранить");
+    }
+    private static void InvokeDialogButton(FrameworkElement root, string label)
+    {
+        var save = Descendants<Button>(root).Single(b => b.Content is string text && text == label);
         var peer = FrameworkElementAutomationPeer.CreatePeerForElement(save) ?? new ButtonAutomationPeer(save);
         if (peer.GetPattern(PatternInterface.Invoke) is not IInvokeProvider invoke) throw new InvalidOperationException("Нет действия сохранения формы");
         invoke.Invoke();

@@ -65,6 +65,8 @@ public sealed partial class PlannerViewModel : ObservableObject, IDisposable
     public event EventHandler? FloatRequested;
     public event EventHandler? HabitEditorRequested;
     public event EventHandler<Payment?>? PaymentEditorRequested;
+    public event EventHandler<Payment>? PaymentDeleteRequested;
+    public event EventHandler<Payment>? PaymentFinishRequested;
     public event EventHandler<Guid>? HabitFinishRequested;
     public IRelayCommand PreviousCommand { get; }
     public IRelayCommand NextCommand { get; }
@@ -121,8 +123,8 @@ public sealed partial class PlannerViewModel : ObservableObject, IDisposable
         FinishHabitCommand = new RelayCommand<Guid>(id => HabitFinishRequested?.Invoke(this, id));
         CreatePaymentCommand = new RelayCommand(() => PaymentEditorRequested?.Invoke(this, null));
         EditPaymentCommand = new RelayCommand<Guid>(id => PaymentEditorRequested?.Invoke(this, Payments.FirstOrDefault(p => p.Id == id)));
-        FinishPaymentCommand = new RelayCommand<Guid>(id => Run(() => _engine.FinishPayment(id)));
-        DeletePaymentCommand = new RelayCommand<Guid>(id => Run(() => _engine.DeletePayment(id)));
+        FinishPaymentCommand = new RelayCommand<Guid>(id => { if (Payments.FirstOrDefault(p => p.Id == id) is { } payment && payment.IsActive(Today)) PaymentFinishRequested?.Invoke(this, payment); });
+        DeletePaymentCommand = new RelayCommand<Guid>(id => { if (Payments.FirstOrDefault(p => p.Id == id) is { } payment) PaymentDeleteRequested?.Invoke(this, payment); });
     }
     public void Navigate(PlannerScreen screen, DateOnly date) { Screen = screen; SelectedDate = date; Refresh(); }
     private void Shift(int direction) => Run(() =>
@@ -158,6 +160,7 @@ public sealed partial class PlannerViewModel : ObservableObject, IDisposable
         else _engine.AddPayment(name, amount, start, repeat, end);
     });
     public void DeletePayment(Guid id) => Run(() => _engine.DeletePayment(id));
+    public void FinishPayment(Guid id) => Run(() => _engine.FinishPayment(id));
     public IReadOnlyList<PlannerTask> TasksOn(DateOnly date, DayPart? part = null) => _engine.TasksOn(date, part).ToList();
     public IReadOnlyList<HabitIndicator> HabitsOn(DateOnly date) => _engine.HabitsOn(date).ToList();
     public IReadOnlyList<PaymentOccurrence> PaymentsOn(DateOnly date) => _engine.PaymentsOn(date).ToList();
