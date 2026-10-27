@@ -752,6 +752,21 @@ Test("Annual task statistics follow assigned year, completion and each type's sh
     var stats = e.StatisticsForYear(2026); Equal(8, stats.AddedTasks); Equal(5, stats.CompletedTasks);
     Equal(25m, stats.TaskTypes[0].Percent); Equal(12.5m, stats.TaskTypes[1].Percent); Equal(37.5m, stats.TaskTypes[3].Percent);
     Equal(100m, stats.TaskTypes.Sum(t => t.Percent)); Equal(5, stats.TaskTypes.Sum(t => t.Completed));
+    Equal(20m, stats.TaskTypes[0].CompletedPercent); Equal(20m, stats.TaskTypes[1].CompletedPercent);
+    Equal(20m, stats.TaskTypes[2].CompletedPercent); Equal(40m, stats.TaskTypes[3].CompletedPercent);
+    Equal(100m, stats.TaskTypes.Sum(t => t.CompletedPercent));
+});
+Test("Annual completed shares handle no completions and update after changing a completion or assigned year", () =>
+{
+    var (e, _, _) = Setup(new(2026, 1, 1));
+    var first = e.AddTask("Important", true, true, new(2026, 1, 1));
+    var second = e.AddTask("Later", false, false, new(2026, 1, 2));
+    Equal(2, e.StatisticsForYear(2026).AddedTasks); Equal(0m, e.StatisticsForYear(2026).TaskTypes.Sum(t => t.CompletedPercent));
+    e.ToggleTask(first.Id); Equal(100m, e.StatisticsForYear(2026).TaskTypes[0].CompletedPercent);
+    e.ToggleTask(second.Id); Equal(50m, e.StatisticsForYear(2026).TaskTypes[0].CompletedPercent);
+    e.MoveTask(first.Id, new(2027, 1, 1)); Equal(100m, e.StatisticsForYear(2026).TaskTypes[3].CompletedPercent);
+    e.ToggleTask(second.Id); Equal(0m, e.StatisticsForYear(2026).TaskTypes.Sum(t => t.CompletedPercent));
+    Equal(100m, e.StatisticsForYear(2027).TaskTypes[0].CompletedPercent);
 });
 Test("Annual recurring counts include unseen repeats without writing or materializing them", () =>
 {

@@ -1,6 +1,6 @@
 namespace Planer.Core;
 
-public sealed record AnnualTaskCount(TaskKind Kind, int Completed, int Added, decimal Percent);
+public sealed record AnnualTaskCount(TaskKind Kind, int Completed, int Added, decimal Percent, decimal CompletedPercent);
 public sealed record AnnualMoodCount(Mood Mood, int Count);
 public sealed record AnnualHabitRecord(Guid Id, string Name, string Color, int Marks, int LongestStreak,
     DateOnly? StreakStart, DateOnly? StreakEnd);

@@ -4,7 +4,7 @@ namespace Planer_App;
 /// <summary>Opt-in QA data. Never populates the user's default database.</summary>
 internal static class DemoData
 {
-    public static PlannerState Create(DateOnly today, bool annualStatistics = false)
+    public static PlannerState Create(DateOnly today, string? annualScenario = null)
     {
         var monday = Dates.Monday(today);
         var s = new PlannerState { LastRolloverWeek = monday };
@@ -36,7 +36,17 @@ internal static class DemoData
         s.Goals[Dates.WeekKey(today)] = "Найти время для важных дел";
         s.Goals[Dates.MonthKey(today)] = "Завершить начатые проекты";
         s.Goals[Dates.YearKey(today)] = "Больше внимания себе и близким";
-        if (annualStatistics) EnrichAnnualStatistics(s, today);
+        if (annualScenario?.StartsWith("Annual", StringComparison.Ordinal) == true) EnrichAnnualStatistics(s, today);
+        if (annualScenario == "AnnualNoCompleted") foreach (var task in s.Tasks) task.Completed = false;
+        if (annualScenario is "AnnualOneKind" or "AnnualSmallSlice")
+        {
+            s.Tasks.Clear();
+            int[] counts = annualScenario == "AnnualOneKind" ? [0, 0, 5, 0] : [97, 1, 1, 1];
+            foreach (var kind in Enum.GetValues<TaskKind>())
+                for (int i = 0; i < counts[(int)kind]; i++) s.Tasks.Add(new() { Description = "Проверка доли " + kind, Date = today,
+                    Important = kind is TaskKind.UrgentImportant or TaskKind.NotUrgentImportant,
+                    Urgent = kind is TaskKind.UrgentImportant or TaskKind.UrgentUnimportant, Completed = true });
+        }
         return s;
     }
     private static void EnrichAnnualStatistics(PlannerState state, DateOnly today)

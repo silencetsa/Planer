@@ -17,11 +17,14 @@ public sealed partial class PlannerEngine
         // Unseen repetitions count exactly like already materialized occurrences. Moved instances,
         // backlog entries and single deleted repeats must retain their current assigned date.
         var tasks = State.Tasks.Where(t => t.Date >= first && t.Date <= last).Concat(MissingOccurrences(first, last)).ToList();
+        int completedTotal = tasks.Count(t => t.Completed);
         var types = Enum.GetValues<TaskKind>().Select(kind =>
         {
             int added = tasks.Count(t => t.Kind == kind);
-            return new AnnualTaskCount(kind, tasks.Count(t => t.Kind == kind && t.Completed), added,
-                tasks.Count == 0 ? 0 : added * 100m / tasks.Count);
+            int completed = tasks.Count(t => t.Kind == kind && t.Completed);
+            return new AnnualTaskCount(kind, completed, added,
+                tasks.Count == 0 ? 0 : added * 100m / tasks.Count,
+                completedTotal == 0 ? 0 : completed * 100m / completedTotal);
         }).ToArray();
 
         var habits = HabitsForYear(year);

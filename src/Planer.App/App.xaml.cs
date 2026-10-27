@@ -98,7 +98,7 @@ public partial class App : Application
             ShellIdentity.Initialize();
             var store = new SqlitePlannerStore(DatabasePath);
             if (!existed && commandLine.Contains("--demo") && dataIndex >= 0)
-                store.Save(DemoData.Create(DateOnly.FromDateTime(DateTime.Now), CaptureScenario?.StartsWith("Annual", StringComparison.Ordinal) == true));
+                store.Save(DemoData.Create(DateOnly.FromDateTime(DateTime.Now), CaptureScenario));
             _engine = new PlannerEngine(store, new SystemPlannerClock());
             if (background)
             {
