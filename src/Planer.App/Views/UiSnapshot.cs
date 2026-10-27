@@ -16,6 +16,7 @@ internal static partial class UiSnapshot
     public static async Task SaveScenarioAsync(FrameworkElement view, string path, string scenario, PlannerViewModel vm)
     {
         await PrepareAsync(view);
+        if (scenario.StartsWith("Annual", StringComparison.Ordinal)) { await SaveAnnualScenarioAsync(view, path, scenario, vm); return; }
         if (scenario.StartsWith("Confirmation", StringComparison.Ordinal)) { await SaveConfirmationScenarioAsync(view, path, scenario, vm); return; }
         if (scenario.StartsWith("Finance", StringComparison.Ordinal)) { await SaveFinanceScenarioAsync(view, path, scenario, vm); return; }
         if (scenario == "StartupHidden") { await SaveAsync(view, path); return; }
@@ -209,7 +210,7 @@ internal static partial class UiSnapshot
         }
         if (scenario == "YearHabits" || scenario == "YearMood")
         {
-            vm.YearMode = scenario == "YearHabits" ? 2 : 1; vm.Refresh(); await SaveAsync(view, path); return;
+            vm.SelectYearHabit(scenario == "YearHabits" ? vm.YearHabits.FirstOrDefault()?.Id : null); vm.Refresh(); await SaveAsync(view, path); return;
         }
         switch (scenario)
         {

@@ -4,7 +4,7 @@ namespace Planer_App;
 /// <summary>Opt-in QA data. Never populates the user's default database.</summary>
 internal static class DemoData
 {
-    public static PlannerState Create(DateOnly today)
+    public static PlannerState Create(DateOnly today, bool annualStatistics = false)
     {
         var monday = Dates.Monday(today);
         var s = new PlannerState { LastRolloverWeek = monday };
@@ -36,6 +36,22 @@ internal static class DemoData
         s.Goals[Dates.WeekKey(today)] = "Найти время для важных дел";
         s.Goals[Dates.MonthKey(today)] = "Завершить начатые проекты";
         s.Goals[Dates.YearKey(today)] = "Больше внимания себе и близким";
+        if (annualStatistics) EnrichAnnualStatistics(s, today);
         return s;
+    }
+    private static void EnrichAnnualStatistics(PlannerState state, DateOnly today)
+    {
+        var first = new DateOnly(today.Year, 1, 1); var activeStart = first.AddDays(14);
+        if (activeStart > today) activeStart = today;
+        foreach (var habit in state.Habits) habit.Created = activeStart;
+        var historical = new Habit { Name = "Зарядка", Created = first.AddYears(-1).AddMonths(11), Ended = activeStart, Color = Palette.Elements[0] };
+        state.Habits.Add(historical);
+        for (int i = 0; i < activeStart.DayNumber - first.DayNumber; i++) state.HabitChecks.Add(new() { HabitId = historical.Id, Date = first.AddDays(i) });
+        for (int i = 0; i < 120; i++) state.HabitChecks.Add(new() { HabitId = state.Habits[1].Id, Date = first.AddMonths(2).AddDays(i) });
+        for (int i = 0; i < 90; i++) state.HabitChecks.Add(new() { HabitId = state.Habits[0].Id, Date = activeStart.AddDays(i * 2) });
+        for (int i = 0; i < 45; i++) state.HabitChecks.Add(new() { HabitId = state.Habits[2].Id, Date = first.AddMonths(4).AddDays(i) });
+        for (int i = 0; i < 81; i++) state.Moods[first.AddDays(i)] = (Mood)(i % 5);
+        for (int i = 0; i < 12; i++) state.Tasks.Add(new() { Description = "План на месяц " + (i + 1), Date = new(today.Year, i + 1, 10),
+            Important = i % 4 is 0 or 2, Urgent = i % 4 is 0 or 1, Completed = i % 3 != 0, Order = 100 + i });
     }
 }

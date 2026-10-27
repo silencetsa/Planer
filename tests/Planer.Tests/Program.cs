@@ -742,6 +742,99 @@ Test("SQLite retains complete payment deletion and inclusive finish without chan
     finally { Directory.Delete(folder, true); }
 });
 
+Test("Annual task statistics follow assigned year, completion and each type's share", () =>
+{
+    var (e, _, _) = Setup();
+    foreach (var (kind, count, completed) in new[] { (TaskKind.UrgentImportant, 2, 1), (TaskKind.UrgentUnimportant, 1, 1), (TaskKind.NotUrgentImportant, 2, 1), (TaskKind.NotUrgentUnimportant, 3, 2) })
+        for (int i = 0; i < count; i++) e.State.Tasks.Add(new() { Description = kind.ToString(), Date = new(2026, i == 0 ? 1 : 12, i == 0 ? 1 : 31),
+            Important = kind is TaskKind.UrgentImportant or TaskKind.NotUrgentImportant, Urgent = kind is TaskKind.UrgentImportant or TaskKind.UrgentUnimportant, Completed = i < completed });
+    e.State.Tasks.AddRange([new() { Date = new(2025, 12, 31), Completed = true }, new() { Date = new(2027, 1, 1) }, new() { Date = null, Completed = true }]);
+    var stats = e.StatisticsForYear(2026); Equal(8, stats.AddedTasks); Equal(5, stats.CompletedTasks);
+    Equal(25m, stats.TaskTypes[0].Percent); Equal(12.5m, stats.TaskTypes[1].Percent); Equal(37.5m, stats.TaskTypes[3].Percent);
+    Equal(100m, stats.TaskTypes.Sum(t => t.Percent)); Equal(5, stats.TaskTypes.Sum(t => t.Completed));
+});
+Test("Annual recurring counts include unseen repeats without writing or materializing them", () =>
+{
+    var (e, clock, store) = Setup(new(2026, 1, 1)); e.AddTask("Weekly", true, false, clock.Today, repeat: Repeat.Weekly);
+    string before = JsonSerializer.Serialize(e.State); store.FailSave = true;
+    Equal(53, e.StatisticsForYear(2026).AddedTasks); Equal(before, JsonSerializer.Serialize(e.State));
+    store.FailSave = false; e.EnsureTaskRange(new(2026, 1, 1), new(2026, 12, 31));
+    Equal(53, e.StatisticsForYear(2026).AddedTasks); Equal(0, e.StatisticsForYear(2026).CompletedTasks);
+});
+Test("Annual statistics respect moved repeats, removed occurrences, backlog and type edits", () =>
+{
+    var (e, clock, _) = Setup(new(2026, 1, 1)); var first = e.AddTask("Weekly", true, false, clock.Today, repeat: Repeat.Weekly);
+    var moved = e.TasksOn(new(2026, 1, 8)).Single(); e.ToggleTask(moved.Id); e.MoveTask(moved.Id, new(2027, 1, 8));
+    Equal(52, e.StatisticsForYear(2026).AddedTasks); Equal(53, e.StatisticsForYear(2027).AddedTasks); Equal(1, e.StatisticsForYear(2027).CompletedTasks);
+    var deleted = e.TasksOn(new(2026, 1, 15)).Single(); e.DeleteTask(deleted.Id, TaskDeleteScope.Occurrence);
+    e.MoveTask(first.Id, null); Equal(50, e.StatisticsForYear(2026).AddedTasks);
+    e.EditTask(moved.Id, moved.Description, false, true);
+    Equal(1, e.StatisticsForYear(2027).TaskTypes[(int)TaskKind.UrgentUnimportant].Completed);
+});
+Test("Annual habit cohorts include carry-over, completed and same-day habits with exclusive end dates", () =>
+{
+    var (e, _, _) = Setup();
+    var carry = new Habit { Name = "Carry", Created = new(2025, 10, 1), Ended = new(2026, 3, 1) };
+    var active = new Habit { Name = "Active", Created = new(2026, 1, 1) };
+    var finished = new Habit { Name = "Finished", Created = new(2026, 6, 1), Ended = new(2026, 6, 2) };
+    var immediate = new Habit { Name = "Same day", Created = new(2026, 7, 1), Ended = new(2026, 7, 1) };
+    e.State.Habits.AddRange([carry, active, finished, immediate,
+        new() { Name = "Before", Created = new(2024, 1, 1), Ended = new(2025, 12, 31) },
+        new() { Name = "Ended January 1", Created = new(2025, 1, 1), Ended = new(2026, 1, 1) },
+        new() { Name = "Next year", Created = new(2027, 1, 1) }]);
+    var stats = e.StatisticsForYear(2026).Habits;
+    Equal(4, stats.InYear); Equal(3, stats.Created); Equal(1, stats.Active); Equal(3, stats.Finished);
+    Equal(false, e.HabitsForYear(2026).Any(h => h.Name == "Before")); Equal(carry.Id, e.HabitsForYear(2025).First(h => h.Name == "Carry").Id);
+});
+Test("Annual habit ranking counts unique valid marks and clips a longest streak at the year boundary", () =>
+{
+    var (e, _, _) = Setup();
+    var reading = new Habit { Name = "Reading", Created = new(2025, 12, 1) };
+    var water = new Habit { Name = "Water", Created = new(2025, 12, 1) };
+    var sleep = new Habit { Name = "Sleep", Created = new(2025, 12, 1), Ended = new(2026, 1, 4) };
+    var walk = new Habit { Name = "Walk", Created = new(2026, 1, 2) }; e.State.Habits.AddRange([reading, water, sleep, walk]);
+    foreach (int day in new[] { 1, 2, 4, 5, 1 }) e.State.HabitChecks.Add(new() { HabitId = reading.Id, Date = new(2026, 1, day) });
+    foreach (var date in new[] { new DateOnly(2025, 12, 30), new(2025, 12, 31), new(2026, 1, 1), new(2026, 1, 2), new(2026, 1, 3) }) e.State.HabitChecks.Add(new() { HabitId = water.Id, Date = date });
+    foreach (int day in new[] { 1, 3, 4 }) e.State.HabitChecks.Add(new() { HabitId = sleep.Id, Date = new(2026, 1, day) });
+    foreach (int day in new[] { 1, 2 }) e.State.HabitChecks.Add(new() { HabitId = walk.Id, Date = new(2026, 1, day) });
+    var stats = e.StatisticsForYear(2026).Habits;
+    Equal("Reading,Water,Sleep", string.Join(',', stats.TopThree.Select(h => h.Name))); Equal(4, stats.TopThree[0].Marks); Equal(2, stats.TopThree[2].Marks);
+    Equal(water.Id, stats.LongestStreak!.Id); Equal(3, stats.LongestStreak.LongestStreak); Equal<DateOnly?>(new(2026, 1, 1), stats.LongestStreak.StreakStart);
+});
+Test("Annual mood statistics count each recorded day once and follow removal or replacement", () =>
+{
+    var (e, _, _) = Setup();
+    foreach (var mood in Enum.GetValues<Mood>()) e.ToggleMood(new(2026, 1, (int)mood + 1), mood);
+    e.ToggleMood(new(2026, 12, 31), Mood.Neutral); e.ToggleMood(new(2025, 12, 31), Mood.Happy); e.ToggleMood(new(2027, 1, 1), Mood.Sad);
+    Equal(6, e.StatisticsForYear(2026).Moods.Sum(m => m.Count)); Equal(2, e.StatisticsForYear(2026).Moods[(int)Mood.Neutral].Count);
+    e.ToggleMood(new(2026, 1, 2), Mood.Good); e.ToggleMood(new(2026, 1, 3), Mood.Happy);
+    Equal(5, e.StatisticsForYear(2026).Moods.Sum(m => m.Count)); Equal(0, e.StatisticsForYear(2026).Moods[(int)Mood.Angry].Count);
+});
+Test("Empty annual statistics have no fictitious leaders or percentages; leap-day streaks include all 366 dates", () =>
+{
+    var (e, _, _) = Setup(new(2025, 1, 1)); var empty = e.StatisticsForYear(2024);
+    Equal(0, empty.AddedTasks); Equal(0m, empty.TaskTypes.Sum(t => t.Percent)); Equal(0, empty.Habits.TopThree.Count); Equal(null, empty.Habits.LongestStreak);
+    var habit = new Habit { Name = "Leap", Created = new(2024, 1, 1) }; e.State.Habits.Add(habit);
+    for (int i = 0; i < 366; i++) e.State.HabitChecks.Add(new() { HabitId = habit.Id, Date = habit.Created.AddDays(i) });
+    Equal(366, e.StatisticsForYear(2024).Habits.LongestStreak!.LongestStreak); Equal(366, e.StatisticsForYear(2024).Habits.TopThree[0].Marks);
+    Equal(null, e.StatisticsForYear(2025).Habits.LongestStreak);
+});
+Test("Annual projections remain readonly after a real SQLite restart", () =>
+{
+    var folder = Path.Combine(Path.GetTempPath(), "Planer-test-" + Guid.NewGuid()); Directory.CreateDirectory(folder);
+    try
+    {
+        var clock = new TestClock { Today = new(2026, 10, 28) }; var store = new SqlitePlannerStore(Path.Combine(folder, "planner.db"));
+        var e = new PlannerEngine(store, clock); var habit = e.AddHabit("History", Palette.Elements[3]); e.ToggleHabit(habit.Id, clock.Today);
+        e.AddTask("Future repeat", false, true, clock.Today, repeat: Repeat.Monthly); e.ToggleMood(clock.Today, Mood.Good);
+        e = new PlannerEngine(store, clock); string before = JsonSerializer.Serialize(store.Load());
+        Equal(1, e.StatisticsForYear(2026).Habits.TopThree.Single().Marks); Equal(3, e.StatisticsForYear(2026).AddedTasks);
+        e.StatisticsForYear(2025); e.StatisticsForYear(2027);
+        Equal(before, JsonSerializer.Serialize(store.Load())); Equal(before, JsonSerializer.Serialize(e.State));
+    }
+    finally { Directory.Delete(folder, true); }
+});
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;
 

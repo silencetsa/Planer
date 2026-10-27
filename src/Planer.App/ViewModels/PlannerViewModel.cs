@@ -56,7 +56,7 @@ public sealed partial class PlannerViewModel : ObservableObject, IDisposable
     public IReadOnlyList<Habit> Habits => _engine.State.Habits.OrderBy(h => h.Ended is not null).ThenByDescending(h => h.Created).ThenByDescending(h => h.Order).ThenByDescending(h => h.Id).ToList();
     public IReadOnlyList<Payment> Payments => _engine.State.Payments.Where(p => p.DeletedFrom is null).ToList();
     public MatrixCounts Matrix => _engine.Matrix(First, Last);
-    public int YearMode { get; set; }
+    public AnnualStatistics YearStatistics => _engine.StatisticsForYear(SelectedDate.Year);
     public bool ShowCompletedPayments { get; set; }
     public event EventHandler<TaskEditRequest>? TaskEditorRequested;
     public event EventHandler<PlannerTask>? TaskDeleteRequested;
@@ -139,7 +139,7 @@ public sealed partial class PlannerViewModel : ObservableObject, IDisposable
         _observedToday = Today;
         if (!moved) Refresh();
     }
-    public void Refresh() { Revision++; OnPropertyChanged(nameof(Revision)); }
+    public void Refresh() { NormalizeYearHabit(); Revision++; OnPropertyChanged(nameof(Revision)); }
     private void EngineChanged(object? sender, EventArgs args)
     {
         if (_savingBudgetIncome) OnPropertyChanged(nameof(Budget)); else Refresh();
