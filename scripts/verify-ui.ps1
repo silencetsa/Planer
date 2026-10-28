@@ -50,6 +50,7 @@ $planerCases = @(
     @{ Name='annual-no-completed'; View='Year'; Scenario='AnnualNoCompleted'; Separate=$true },
     @{ Name='annual-one-kind'; View='Year'; Scenario='AnnualOneKind'; Separate=$true },
     @{ Name='annual-small-slice'; View='Year'; Scenario='AnnualSmallSlice'; Separate=$true },
+    @{ Name='annual-long-values'; View='Year'; Scenario='AnnualLongValues'; Separate=$true },
     @{ Name='annual-interactions'; View='Year'; Scenario='AnnualInteractions'; Separate=$true; Timeout=25000 },
     @{ Name='week-notes'; View='Week'; Scenario='Notes' },
     @{ Name='month-notes'; View='Month'; Scenario='Notes' },

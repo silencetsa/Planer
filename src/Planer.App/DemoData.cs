@@ -38,6 +38,12 @@ internal static class DemoData
         s.Goals[Dates.YearKey(today)] = "Больше внимания себе и близким";
         if (annualScenario?.StartsWith("Annual", StringComparison.Ordinal) == true) EnrichAnnualStatistics(s, today);
         if (annualScenario == "AnnualNoCompleted") foreach (var task in s.Tasks) task.Completed = false;
+        if (annualScenario == "AnnualLongValues")
+        {
+            foreach (var habit in s.Habits) habit.Name = new string('Ш', 13);
+            s.Moods.Clear(); var first = new DateOnly(today.Year, 1, 1);
+            for (int i = 0; i < (DateTime.IsLeapYear(today.Year) ? 366 : 365); i++) s.Moods[first.AddDays(i)] = Mood.Happy;
+        }
         if (annualScenario is "AnnualOneKind" or "AnnualSmallSlice")
         {
             s.Tasks.Clear();

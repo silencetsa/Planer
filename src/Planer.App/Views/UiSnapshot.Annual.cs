@@ -26,21 +26,28 @@ internal static partial class UiSnapshot
         var moodRow = Descendants<Grid>(panel).Single(g => g.Name == "YearMoodStatistics");
         if (moodRow.Children.Count != 5 || Descendants<TextBlock>(moodRow).Any(text => !int.TryParse(text.Text, out _)))
             throw new InvalidOperationException("Статистика настроения должна содержать только пять цветных индикаторов и числа");
+        string[] outlineIcons = ["GreenPanel.png", "YellowPanelSoft.png", "RedPanel.png", "BluePanel.png", "PurplePanelWarm.png"];
         foreach (var group in moodRow.Children.Cast<StackPanel>())
         {
-            if (group.Children[0] is not Image icon || icon.Tag is not Ui.OriginalImageLoad || group.Children[1] is not TextBlock count || count.FontSize < 21
-                || count.TransformToVisual(group).TransformPoint(new()).Y < icon.ActualHeight)
-                throw new InvalidOperationException("Настроения должны показывать исходные смайлики с крупными числами снизу");
+            int index = Grid.GetColumn(group);
+            if (group.Children[0] is not Image icon || icon.Tag is not Ui.OriginalImageLoad image || image.Name != outlineIcons[index]
+                || group.Children[1] is not TextBlock count || count.FontSize != 15 || count.FontWeight != Microsoft.UI.Text.FontWeights.Normal
+                || count.TransformToVisual(group).TransformPoint(new()).X < icon.ActualWidth
+                || group.ActualWidth > moodRow.ColumnDefinitions[index].ActualWidth + 1)
+                throw new InvalidOperationException("Настроения должны показывать контурные смайлики и числа справа без перекрытия");
         }
         var finance = Descendants<StackPanel>(panel).Single(s => s.Name == "YearFinanceStatisticsPlaceholder");
         if (Descendants<TextBlock>(finance).Count(t => t.Text == "— / —") != 5) throw new InvalidOperationException("Не зарезервированы пять строк факт/план финансов");
         CheckAnnualCharts(panel, actual);
-        var flow = Descendants<StackPanel>(panel).Single(p => p.Name == "AnnualStatisticsFlow");
+        var flow = Descendants<Grid>(panel).Single(p => p.Name == "AnnualStatisticsFlow");
+        double? previousGap = null;
         for (int i = 1; i < flow.Children.Count; i++)
         {
             var previous = (FrameworkElement)flow.Children[i - 1]; var next = (FrameworkElement)flow.Children[i];
             double gap = next.TransformToVisual(flow).TransformPoint(new()).Y - previous.TransformToVisual(flow).TransformPoint(new(0, previous.ActualHeight)).Y;
-            if (gap < 18 || gap > 22) throw new InvalidOperationException("Между блоками статистики появился лишний пробел или перекрытие");
+            if (gap < 11 || previousGap is { } previousValue && Math.Abs(gap - previousValue) > 1)
+                throw new InvalidOperationException("Промежутки между блоками статистики должны быть равными без перекрытия");
+            previousGap = gap;
         }
         var cells = Descendants<Border>(view).Where(b => b.Tag is YearDayPresentation).ToArray();
         if (cells.Length != (DateTime.IsLeapYear(vm.SelectedDate.Year) ? 366 : 365)) throw new InvalidOperationException("Годовой календарь потерял дни");
@@ -60,16 +67,19 @@ internal static partial class UiSnapshot
         double sidebarLeft = sidebar.TransformToVisual(view).TransformPoint(new()).X;
         double calendarRight = calendar.TransformToVisual(view).TransformPoint(new(calendar.ActualWidth, 0)).X;
         if (calendarRight > sidebarLeft - 2) throw new InvalidOperationException("Годовой календарь перекрывает статистику");
-        if (scenario is "AnnualMinimum" or "AnnualStatistics")
+        var statisticsScroll = Descendants<ScrollViewer>(panel).Single(s => s.Name == "YearStatisticsScroll");
+        if (scenario != "AnnualMinimum")
         {
-            if (scenario == "AnnualMinimum")
-            {
-                calendar.ChangeView(null, double.MaxValue, null, true); await PrepareAsync(view);
-                var december = Descendants<Button>(calendar).Single(b => b.CommandParameter is DateOnly date && date.Month == 12);
-                var bottom = december.TransformToVisual(view).TransformPoint(new(0, december.ActualHeight));
-                if (bottom.Y > view.ActualHeight + 1) throw new InvalidOperationException("Декабрь недоступен в минимальном окне");
-            }
-            var statisticsScroll = Descendants<ScrollViewer>(panel).Single(s => s.Name == "YearStatisticsScroll");
+            double financeBottom = finance.TransformToVisual(statisticsScroll).TransformPoint(new(0, finance.ActualHeight)).Y;
+            if (statisticsScroll.ScrollableHeight > 1 || Math.Abs(financeBottom - statisticsScroll.ActualHeight) > 1)
+                throw new InvalidOperationException($"Статистика должна помещаться без прокрутки в стандартном окне: контент {flow.ActualHeight}, область {statisticsScroll.ActualHeight}, прокрутка {statisticsScroll.ScrollableHeight}");
+        }
+        if (scenario == "AnnualMinimum")
+        {
+            calendar.ChangeView(null, double.MaxValue, null, true); await PrepareAsync(view);
+            var december = Descendants<Button>(calendar).Single(b => b.CommandParameter is DateOnly date && date.Month == 12);
+            var bottom = december.TransformToVisual(view).TransformPoint(new(0, december.ActualHeight));
+            if (bottom.Y > view.ActualHeight + 1) throw new InvalidOperationException("Декабрь недоступен в минимальном окне");
             statisticsScroll.ChangeView(null, double.MaxValue, null, true); await PrepareAsync(view);
             double financeBottom = finance.TransformToVisual(statisticsScroll).TransformPoint(new(0, finance.ActualHeight)).Y;
             if (financeBottom > statisticsScroll.ActualHeight + 1 || financeBottom < 1)
@@ -95,25 +105,39 @@ internal static partial class UiSnapshot
             if (type.CompletedPercent != percent || ((SolidColorBrush)sector.Fill).Color != Ui.Brush(Palette.Elements[colors[(int)type.Kind]]).Color)
                 throw new InvalidOperationException("Сектор использует неверную базу процента или цвет элементов");
             var label = labels.Single(t => ((AnnualTaskCount)t.Tag).Kind == type.Kind);
-            if (label.Text != percent.ToString("0.#", PlannerViewModel.Russian) + "%" || label.FontSize < 16 || Canvas.GetLeft(label) < 0
+            if (label.Text != percent.ToString("0.#", PlannerViewModel.Russian) + "%" || label.FontSize != 13 || label.FontWeight != Microsoft.UI.Text.FontWeights.Normal || Canvas.GetLeft(label) < 0
                 || Canvas.GetLeft(label) + label.ActualWidth > pie.ActualWidth + 1 || Canvas.GetTop(label) < 0 || Canvas.GetTop(label) + label.ActualHeight > pie.ActualHeight + 1)
                 throw new InvalidOperationException("Подпись доли выполненных задач обрезана или устарела");
             if (type.Completed == statistics.CompletedTasks && sector is not Ellipse) throw new InvalidOperationException("Диаграмма 100% не замкнута в круг");
         }
         for (int i = 0; i < labels.Length; i++)
             for (int j = i + 1; j < labels.Length; j++)
-                if (Math.Abs(Canvas.GetLeft(labels[i]) - Canvas.GetLeft(labels[j])) < 60 && Math.Abs(Canvas.GetTop(labels[i]) - Canvas.GetTop(labels[j])) < 24)
+                if (Math.Abs(Canvas.GetLeft(labels[i]) - Canvas.GetLeft(labels[j])) < 60 && Math.Abs(Canvas.GetTop(labels[i]) - Canvas.GetTop(labels[j])) < 18)
                     throw new InvalidOperationException("Подписи редких типов задач перекрываются");
-        var bars = Descendants<StackPanel>(panel).Where(p => p.Name == "AnnualHabitBar").ToArray();
-        if (bars.Length != statistics.Habits.TopThree.Count) throw new InvalidOperationException("Гистограмма потеряла привычку");
-        foreach (var entry in bars)
+        var top = Descendants<Grid>(panel).Where(p => p.Name == "AnnualTopHabit").ToArray();
+        if (top.Length != statistics.Habits.TopThree.Count || Descendants<StackPanel>(panel).Any(p => p.Name == "AnnualHabitBar"))
+            throw new InvalidOperationException("Топ привычек должен быть нумерованным списком");
+        for (int i = 0; i < top.Length; i++)
         {
+            var entry = top[i];
             var habit = (AnnualHabitRecord)entry.Tag;
-            var bar = (Grid)((Border)entry.Children[1]).Child;
-            double ratio = (double)habit.Marks / statistics.Habits.TopThree[0].Marks;
-            var fill = (Border)bar.Children[0];
-            if (Math.Abs(fill.ActualWidth / bar.ActualWidth - ratio) > .01)
-                throw new InvalidOperationException("Длина гистограммы не соответствует количеству отметок");
+            if (((TextBlock)entry.Children[0]).Text != $"{i + 1}." || ((TextBlock)entry.Children[1]).Text != habit.Name
+                || entry.Children.Cast<TextBlock>().Any(t => t.FontSize != 13 || t.FontWeight != Microsoft.UI.Text.FontWeights.Normal))
+                throw new InvalidOperationException("Неверные подписи или размеры нумерованного топа привычек");
+        }
+        var taskRows = Descendants<Grid>(panel).Single(g => g.Name == "AnnualTaskRows");
+        var separators = taskRows.Children.OfType<TextBlock>().Where(t => t.Name == "AnnualTaskSeparator").ToArray();
+        if (separators.Length != 5 || separators.Max(t => t.TransformToVisual(taskRows).TransformPoint(new()).X)
+            - separators.Min(t => t.TransformToVisual(taskRows).TransformPoint(new()).X) > .5)
+            throw new InvalidOperationException("Разделители выполнено/добавлено не выровнены по вертикали");
+        foreach (var badge in taskRows.Children.OfType<Border>())
+        {
+            int row = Grid.GetRow(badge);
+            double right = badge.TransformToVisual(taskRows).TransformPoint(new(badge.ActualWidth, 0)).X;
+            foreach (var count in taskRows.Children.OfType<TextBlock>().Where(t => Grid.GetRow(t) == row && Grid.GetColumn(t) > 0))
+                if (((SolidColorBrush)count.Foreground).Color != Ui.Brush(Ui.Ink).Color || count.FontSize != 13 || count.FontWeight != Microsoft.UI.Text.FontWeights.Normal
+                    || count.TransformToVisual(taskRows).TransformPoint(new()).X < right + 2)
+                    throw new InvalidOperationException("Серые числа должны находиться справа вне цветной плашки задачи");
         }
     }
     private static async Task CheckAnnualInteractionsAsync(FrameworkElement view, PlannerViewModel vm)
